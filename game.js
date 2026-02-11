@@ -169,7 +169,6 @@ touchArea.addEventListener('touchend', e => {
 
 touchArea.addEventListener('mousedown', e => {
     ensureAudio();
-    if (state === 'title') { state = 'charSelect'; return; }
 });
 
 function getInput() {
@@ -1396,23 +1395,23 @@ touchArea.addEventListener('click', e => {
         // Character grid: 3 cols x 2 rows
         for (let i = 0; i < 6; i++) {
             const col = i % 3, row = Math.floor(i / 3);
-            const bx = 40 + col * 120, by = 260 + row * 160, bw = 100, bh = 140;
+            const bx = 40 + col * 120, by = 70 + row * 230, bw = 100, bh = 200;
             if (cx >= bx && cx <= bx+bw && cy >= by && cy <= by+bh) {
                 if (CHARS[i].unlocked()) { selectedChar = i; }
             }
         }
         // Start button
-        if (cx >= 100 && cx <= 300 && cy >= 610 && cy <= 660) {
-            initGame();
+        if (cx >= 100 && cx <= 300 && cy >= 580 && cy <= 620) {
+            if (CHARS[selectedChar].unlocked()) initGame();
         }
         return;
     }
 
     if (state === 'levelUp') {
-        const cardW = 110, cardH = 140, startX2 = (W - levelUpChoices.length * cardW - (levelUpChoices.length-1)*10) / 2;
+        const cardW = 110, cardH = 160, startX2 = (W - levelUpChoices.length * cardW - (levelUpChoices.length-1)*10) / 2;
         for (let i = 0; i < levelUpChoices.length; i++) {
             const bx = startX2 + i * (cardW + 10);
-            const by2 = 260;
+            const by2 = 250;
             if (cx >= bx && cx <= bx+cardW && cy >= by2 && cy <= by2+cardH) {
                 selectChoice(i);
                 return;

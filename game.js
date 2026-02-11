@@ -144,11 +144,18 @@ document.addEventListener('keyup', e => { keys[e.key] = false; });
 
 touchArea.addEventListener('touchstart', e => {
     e.preventDefault(); ensureAudio();
-    if (state === 'title') { state = 'charSelect'; return; }
     const t2 = e.touches[0];
+    const tcx = (t2.clientX - offX) / scale;
+    const tcy = (t2.clientY - offY) / scale;
+    // Menu states: handle as tap
+    if (state === 'title' || state === 'charSelect' || state === 'levelUp' || state === 'gameOver') {
+        handleTap(tcx, tcy);
+        return;
+    }
+    // Playing state: joystick drag
     touchActive = true;
-    touchStartX = (t2.clientX - offX) / scale;
-    touchStartY = (t2.clientY - offY) / scale;
+    touchStartX = tcx;
+    touchStartY = tcy;
     touchDX = 0; touchDY = 0;
 }, { passive: false });
 
@@ -1384,15 +1391,11 @@ function selectChoice(idx) {
     state = 'playing';
 }
 
-// Click/touch handler for level-up and menus
-touchArea.addEventListener('click', e => {
-    const cx = (e.clientX - offX) / scale;
-    const cy = (e.clientY - offY) / scale;
-
+// Unified tap handler (works for both click and touch)
+function handleTap(cx, cy) {
     if (state === 'title') { state = 'charSelect'; return; }
 
     if (state === 'charSelect') {
-        // Character grid: 3 cols x 2 rows
         for (let i = 0; i < 6; i++) {
             const col = i % 3, row = Math.floor(i / 3);
             const bx = 40 + col * 120, by = 70 + row * 230, bw = 100, bh = 200;
@@ -1400,7 +1403,6 @@ touchArea.addEventListener('click', e => {
                 if (CHARS[i].unlocked()) { selectedChar = i; }
             }
         }
-        // Start button
         if (cx >= 100 && cx <= 300 && cy >= 580 && cy <= 620) {
             if (CHARS[selectedChar].unlocked()) initGame();
         }
@@ -1424,6 +1426,13 @@ touchArea.addEventListener('click', e => {
         if (cx >= 80 && cx <= 200 && cy >= 500 && cy <= 540) { initGame(); return; }
         if (cx >= 220 && cx <= 340 && cy >= 500 && cy <= 540) { state = 'title'; return; }
     }
+}
+
+// Mouse click
+touchArea.addEventListener('click', e => {
+    const cx = (e.clientX - offX) / scale;
+    const cy = (e.clientY - offY) / scale;
+    handleTap(cx, cy);
 });
 
 // Keyboard for level-up

@@ -142,20 +142,27 @@ const touchArea = document.getElementById('touch-area');
 document.addEventListener('keydown', e => { keys[e.key] = true; ensureAudio(); });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 
+function screenToCanvas(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) / rect.width * W,
+        y: (clientY - rect.top) / rect.height * H
+    };
+}
+
 touchArea.addEventListener('touchstart', e => {
     e.preventDefault(); ensureAudio();
     const t2 = e.touches[0];
-    const tcx = (t2.clientX - offX) / scale;
-    const tcy = (t2.clientY - offY) / scale;
+    const pos = screenToCanvas(t2.clientX, t2.clientY);
     // Menu states: handle as tap
     if (state === 'title' || state === 'charSelect' || state === 'levelUp' || state === 'gameOver') {
-        handleTap(tcx, tcy);
+        handleTap(pos.x, pos.y);
         return;
     }
     // Playing state: joystick drag
     touchActive = true;
-    touchStartX = tcx;
-    touchStartY = tcy;
+    touchStartX = pos.x;
+    touchStartY = pos.y;
     touchDX = 0; touchDY = 0;
 }, { passive: false });
 
@@ -163,10 +170,9 @@ touchArea.addEventListener('touchmove', e => {
     e.preventDefault();
     if (!touchActive) return;
     const t2 = e.touches[0];
-    const cx = (t2.clientX - offX) / scale;
-    const cy = (t2.clientY - offY) / scale;
-    touchDX = cx - touchStartX;
-    touchDY = cy - touchStartY;
+    const pos = screenToCanvas(t2.clientX, t2.clientY);
+    touchDX = pos.x - touchStartX;
+    touchDY = pos.y - touchStartY;
 }, { passive: false });
 
 touchArea.addEventListener('touchend', e => {
@@ -1430,9 +1436,8 @@ function handleTap(cx, cy) {
 
 // Mouse click
 touchArea.addEventListener('click', e => {
-    const cx = (e.clientX - offX) / scale;
-    const cy = (e.clientY - offY) / scale;
-    handleTap(cx, cy);
+    const pos = screenToCanvas(e.clientX, e.clientY);
+    handleTap(pos.x, pos.y);
 });
 
 // Keyboard for level-up

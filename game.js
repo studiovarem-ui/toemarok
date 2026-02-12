@@ -738,8 +738,11 @@ function drawThunder(x, y) {
 
 function drawExpOrb(x, y) {
     const glow = Math.sin(t * 4) * 0.3 + 0.7;
-    ctx.globalAlpha = glow * 0.3; circ(x, y, 8, '#00FF88'); ctx.globalAlpha = 1;
+    ctx.shadowColor = '#00FF88';
+    ctx.shadowBlur = 8;
+    ctx.globalAlpha = glow * 0.4; circ(x, y, 9, '#00FF88'); ctx.globalAlpha = 1;
     circ(x, y, 4, '#00CC66'); circ(x, y, 3, '#00FF88'); circ(x, y-1, 1.5, '#AAFFCC');
+    ctx.shadowBlur = 0;
 }
 
 const charDrawFns = [drawExorcist, drawMunyeo, drawJeonwoochi, drawHonggildong, drawJanggun, drawSanshin];
@@ -749,35 +752,25 @@ const enemyDrawFns = [drawJapgwi, drawDokkaebul, drawMulgwisin, drawYacha, drawG
 // ============================================
 // MAP DRAWING
 // ============================================
-// Background image (1024x1024, tiled 2x2 = 2048x2048 map area)
+// Background image (1024x1024, stretched to cover full map)
 const bgImg = new Image();
 bgImg.src = 'bg.jpg';
 let bgLoaded = false;
 bgImg.onload = () => { bgLoaded = true; };
-const BG_SIZE = 1024; // image size
-const MAP_TILES = 2;  // 2x2 tiling
-const MAP_PX = BG_SIZE * MAP_TILES; // 2048 total
+const MAP_WORLD = 2000; // map spans -1000 to +1000
 
 function drawMap(camX, camY) {
     if (bgLoaded) {
-        // Draw 2x2 tiled background centered on (0,0)
-        // Map spans from -1024 to +1024
-        const offsetX = -MAP_PX / 2; // -1024
-        const offsetY = -MAP_PX / 2;
-        for (let ty = 0; ty < MAP_TILES; ty++) {
-            for (let tx = 0; tx < MAP_TILES; tx++) {
-                const worldX = offsetX + tx * BG_SIZE;
-                const worldY = offsetY + ty * BG_SIZE;
-                const sx = worldX - camX + W / 2;
-                const sy = worldY - camY + H / 2;
-                // Only draw if visible on screen
-                if (sx + BG_SIZE > 0 && sx < W && sy + BG_SIZE > 0 && sy < H) {
-                    ctx.drawImage(bgImg, sx, sy, BG_SIZE, BG_SIZE);
-                }
-            }
-        }
+        // Draw single image stretched to cover entire map area
+        const worldX = -MAP_WORLD / 2;
+        const worldY = -MAP_WORLD / 2;
+        const sx = worldX - camX + W / 2;
+        const sy = worldY - camY + H / 2;
+        ctx.drawImage(bgImg, sx, sy, MAP_WORLD, MAP_WORLD);
+        // Darken background slightly for character visibility
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(sx, sy, MAP_WORLD, MAP_WORLD);
     } else {
-        // Fallback: simple color fill while loading
         ctx.fillStyle = '#3a5a2a';
         ctx.fillRect(0, 0, W, H);
     }
@@ -1949,17 +1942,25 @@ function drawGame() {
             ctx.globalAlpha = 1;
         }
         if (e.isBoss) {
+            // Boss outline glow
+            ctx.shadowColor = '#FF0000';
+            ctx.shadowBlur = 12;
             if (e.type === 98) drawGwiwang(sx, sy, t*3);
             else if (e.type === 97) drawDokkaebiKing(sx, sy, t*3);
             else drawGumihoKing(sx, sy, t*3);
+            ctx.shadowBlur = 0;
             // Boss HP bar - big
             const bhw = 80, bhh = 6;
             px(sx-bhw/2, sy-50, bhw, bhh, '#111');
             px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), bhh-2, '#FF2222');
             px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), 1, '#FF6666');
         } else {
+            // Enemy outline for visibility
+            ctx.shadowColor = '#FF4444';
+            ctx.shadowBlur = 6;
             const drawFn2 = enemyDrawFns[e.type];
             if (drawFn2) drawFn2(sx, sy, t*3);
+            ctx.shadowBlur = 0;
             // Small HP bar for damaged enemies
             if (e.hp < e.maxHp) {
                 const hw = 16, hh = 2;
@@ -1972,8 +1973,12 @@ function drawGame() {
     // Player
     const psx = W/2, psy = H/2;
     if (player.iframes > 0 && Math.floor(t*15)%2===0) ctx.globalAlpha = 0.3;
+    // Player outline glow for visibility
+    ctx.shadowColor = '#FFFFFF';
+    ctx.shadowBlur = 8;
     const drawFn = charDrawFns[player.charIdx];
     if (drawFn) drawFn(psx, psy, player.frame);
+    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     // Particles

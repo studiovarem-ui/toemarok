@@ -89,6 +89,8 @@ let player, enemies, projectiles, orbs, particles, dmgNums;
 let gameTime, kills, spawnTimer, bossSpawned1, bossSpawned2;
 let bombCooldown, lastTime, screenFlash = 0, screenFlashColor = '#FFF';
 let enemyIdCounter = 0; // Unique ID for each enemy
+let nextBossTime = 180; // 3분마다 보스
+let bossWave = 0; // 보스 웨이브 카운터
 
 const CHARS = [
     { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:150, spd:130, atk:1.2, range:50 },
@@ -779,6 +781,7 @@ function initGame() {
     enemies = []; projectiles = []; orbs = []; particles = []; dmgNums = [];
     gameTime = 0; kills = 0; spawnTimer = 0;
     bossSpawned1 = false; bossSpawned2 = false;
+    nextBossTime = 180; bossWave = 0;
     bombCooldown = 0; lastTime = performance.now();
     state = 'playing';
 }
@@ -806,19 +809,19 @@ function computePlayerStats() {
 // ENEMY SPAWNING
 // ============================================
 const ENEMY_DEFS = [
-    { name:'잡귀', hp:2, spd:65, dmg:2, radius:10, exp:3, pattern:'straight', minTime:0 },
-    { name:'도깨불', hp:4, spd:50, dmg:4, radius:8, exp:5, pattern:'zigzag', minTime:30 },
-    { name:'물귀신', hp:6, spd:40, dmg:4, radius:10, exp:6, pattern:'aimed', minTime:90 },
-    { name:'야차', hp:5, spd:100, dmg:5, radius:9, exp:8, pattern:'swooper', minTime:150 },
-    { name:'강시', hp:16, spd:30, dmg:6, radius:12, exp:10, pattern:'tank', minTime:210 },
-    { name:'원귀', hp:6, spd:18, dmg:4, radius:10, exp:8, pattern:'sniper', minTime:270 },
-    { name:'삼두구', hp:3, spd:55, dmg:3, radius:10, exp:5, pattern:'formation', minTime:330 },
-    { name:'이무기', hp:12, spd:45, dmg:5, radius:12, exp:12, pattern:'spiral', minTime:400 },
+    { name:'잡귀', hp:2.5, spd:78, dmg:2.5, radius:10, exp:3, pattern:'straight', minTime:0 },
+    { name:'도깨불', hp:5, spd:60, dmg:5, radius:8, exp:5, pattern:'zigzag', minTime:30 },
+    { name:'물귀신', hp:7, spd:48, dmg:5, radius:10, exp:6, pattern:'aimed', minTime:60 },
+    { name:'야차', hp:6, spd:120, dmg:6, radius:9, exp:8, pattern:'swooper', minTime:100 },
+    { name:'강시', hp:19, spd:36, dmg:7, radius:12, exp:10, pattern:'tank', minTime:140 },
+    { name:'원귀', hp:7, spd:22, dmg:5, radius:10, exp:8, pattern:'sniper', minTime:180 },
+    { name:'삼두구', hp:4, spd:66, dmg:4, radius:10, exp:5, pattern:'formation', minTime:220 },
+    { name:'이무기', hp:14, spd:54, dmg:6, radius:12, exp:12, pattern:'spiral', minTime:260 },
 ];
 
 function spawnEnemy(typeIdx, px2, py2) {
     const def = ENEMY_DEFS[typeIdx];
-    const hpScale = 1 + gameTime / 60 * 0.1;
+    const hpScale = 1 + gameTime / 60 * 0.12;
     let sx, sy;
     if (px2 !== undefined) { sx = px2; sy = py2; }
     else {
@@ -836,16 +839,19 @@ function spawnEnemy(typeIdx, px2, py2) {
     });
 }
 
-function spawnBoss(type) {
+function spawnBoss(type, wave) {
+    const w = wave || 0;
+    const hpMul = 1 + w * 0.3; // 웨이브마다 30% 강해짐
     const angle = Math.random() * Math.PI * 2;
     const dist = 350;
     const bx = player.x + Math.cos(angle) * dist;
     const by = player.y + Math.sin(angle) * dist;
+    const baseHp = type === 1 ? 240 : 600; // 120% of 200/500
     const boss = {
         uid: ++enemyIdCounter,
         x: bx, y: by, type: type === 1 ? 98 : 99,
-        hp: type === 1 ? 200 : 500, maxHp: type === 1 ? 200 : 500,
-        spd: type === 1 ? 35 : 30, dmg: type === 1 ? 12 : 15,
+        hp: baseHp * hpMul, maxHp: baseHp * hpMul,
+        spd: type === 1 ? 38 : 33, dmg: type === 1 ? 14 : 18,
         radius: type === 1 ? 30 : 35, exp: type === 1 ? 100 : 300,
         pattern: type === 1 ? 'boss1' : 'boss2',
         timer: 0, phase: 0, angle: 0, isBoss: true, shootCd: 0,
@@ -856,8 +862,8 @@ function spawnBoss(type) {
 }
 
 function updateSpawning(dt) {
-    // Easy-balanced spawn rate
-    const baseRate = 1.2 + gameTime / 60 * 0.6 + Math.floor(gameTime / 60) * 0.3;
+    // 120% spawn rate
+    const baseRate = 1.5 + gameTime / 60 * 0.7 + Math.floor(gameTime / 60) * 0.35;
     spawnTimer += dt * baseRate;
     while (spawnTimer >= 1) {
         spawnTimer -= 1;
@@ -888,7 +894,7 @@ function updateSpawning(dt) {
     }
     // Wave burst every 30 seconds - big swarm
     if (Math.floor(gameTime) % 30 === 0 && Math.floor(gameTime) !== Math.floor(gameTime - dt)) {
-        const burstCount = 4 + Math.floor(gameTime / 60);
+        const burstCount = 5 + Math.floor(gameTime / 60);
         for (let i = 0; i < burstCount; i++) {
             const a = (i / burstCount) * Math.PI * 2;
             spawnEnemy(0, player.x + Math.cos(a)*400, player.y + Math.sin(a)*400);
@@ -903,9 +909,13 @@ function updateSpawning(dt) {
         });
         while (enemies.length > 200) enemies.pop();
     }
-    // Boss spawns
-    if (gameTime >= 450 && !bossSpawned1) { bossSpawned1 = true; spawnBoss(1); }
-    if (gameTime >= 900 && !bossSpawned2) { bossSpawned2 = true; spawnBoss(2); }
+    // Boss spawns every 3 minutes, alternating types, getting stronger
+    if (gameTime >= nextBossTime) {
+        bossWave++;
+        const bossType = bossWave % 2 === 1 ? 1 : 2; // 홀수=귀왕, 짝수=구미호왕
+        spawnBoss(bossType, bossWave);
+        nextBossTime += 180; // 다음 보스 3분 후
+    }
 }
 
 

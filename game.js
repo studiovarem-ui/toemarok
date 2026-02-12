@@ -735,8 +735,8 @@ function drawParticles(camX, camY) {
 // ============================================
 // DAMAGE NUMBERS
 // ============================================
-function spawnDmgNum(x, y, val, color) {
-    dmgNums.push({ x, y, val: Math.floor(val), vy: -50, life: 0.8, color: color || '#FFF' });
+function spawnDmgNum(x, y, val, color, isCrit) {
+    dmgNums.push({ x, y, val: Math.floor(val), vy: -50, life: 0.8, color: color || '#FFF', crit: isCrit });
 }
 
 function updateDmgNums(dt) {
@@ -751,7 +751,11 @@ function drawDmgNums(camX, camY) {
     for (const d of dmgNums) {
         const sx = d.x - camX + W/2, sy = d.y - camY + H/2;
         ctx.globalAlpha = Math.max(0, d.life / 0.8);
-        txt(String(d.val), sx, sy, d.color, 10);
+        const isCrit = d.crit || d.color === '#FFDD00';
+        const sz = isCrit ? 14 : (d.text ? 12 : 10);
+        const label = d.text ? d.val : String(d.val);
+        txt(label, sx, sy, d.color, sz);
+        if (isCrit && !d.text) txt('크리!', sx, sy - 12, '#FFDD00', 8);
     }
     ctx.globalAlpha = 1;
 }
@@ -801,19 +805,19 @@ function computePlayerStats() {
 // ENEMY SPAWNING
 // ============================================
 const ENEMY_DEFS = [
-    { name:'잡귀', hp:3, spd:75, dmg:3, radius:10, exp:3, pattern:'straight', minTime:0 },
-    { name:'도깨불', hp:5, spd:60, dmg:5, radius:8, exp:5, pattern:'zigzag', minTime:30 },
-    { name:'물귀신', hp:8, spd:45, dmg:5, radius:10, exp:6, pattern:'aimed', minTime:90 },
-    { name:'야차', hp:6, spd:120, dmg:7, radius:9, exp:8, pattern:'swooper', minTime:150 },
-    { name:'강시', hp:20, spd:35, dmg:8, radius:12, exp:10, pattern:'tank', minTime:210 },
-    { name:'원귀', hp:8, spd:20, dmg:5, radius:10, exp:8, pattern:'sniper', minTime:270 },
-    { name:'삼두구', hp:4, spd:65, dmg:4, radius:10, exp:5, pattern:'formation', minTime:330 },
-    { name:'이무기', hp:15, spd:55, dmg:7, radius:12, exp:12, pattern:'spiral', minTime:400 },
+    { name:'잡귀', hp:2, spd:65, dmg:2, radius:10, exp:3, pattern:'straight', minTime:0 },
+    { name:'도깨불', hp:4, spd:50, dmg:4, radius:8, exp:5, pattern:'zigzag', minTime:30 },
+    { name:'물귀신', hp:6, spd:40, dmg:4, radius:10, exp:6, pattern:'aimed', minTime:90 },
+    { name:'야차', hp:5, spd:100, dmg:5, radius:9, exp:8, pattern:'swooper', minTime:150 },
+    { name:'강시', hp:16, spd:30, dmg:6, radius:12, exp:10, pattern:'tank', minTime:210 },
+    { name:'원귀', hp:6, spd:18, dmg:4, radius:10, exp:8, pattern:'sniper', minTime:270 },
+    { name:'삼두구', hp:3, spd:55, dmg:3, radius:10, exp:5, pattern:'formation', minTime:330 },
+    { name:'이무기', hp:12, spd:45, dmg:5, radius:12, exp:12, pattern:'spiral', minTime:400 },
 ];
 
 function spawnEnemy(typeIdx, px2, py2) {
     const def = ENEMY_DEFS[typeIdx];
-    const hpScale = 1 + gameTime / 60 * 0.15;
+    const hpScale = 1 + gameTime / 60 * 0.1;
     let sx, sy;
     if (px2 !== undefined) { sx = px2; sy = py2; }
     else {
@@ -837,8 +841,8 @@ function spawnBoss(type) {
     const by = player.y + Math.sin(angle) * dist;
     const boss = {
         x: bx, y: by, type: type === 1 ? 98 : 99,
-        hp: type === 1 ? 300 : 800, maxHp: type === 1 ? 300 : 800,
-        spd: type === 1 ? 40 : 35, dmg: type === 1 ? 20 : 25,
+        hp: type === 1 ? 200 : 500, maxHp: type === 1 ? 200 : 500,
+        spd: type === 1 ? 35 : 30, dmg: type === 1 ? 12 : 15,
         radius: type === 1 ? 30 : 35, exp: type === 1 ? 100 : 300,
         pattern: type === 1 ? 'boss1' : 'boss2',
         timer: 0, phase: 0, angle: 0, isBoss: true, shootCd: 0,
@@ -849,8 +853,8 @@ function spawnBoss(type) {
 }
 
 function updateSpawning(dt) {
-    // Balanced spawn rate: starts gentle, ramps up over time
-    const baseRate = 1.5 + gameTime / 60 * 0.8 + Math.floor(gameTime / 60) * 0.4;
+    // Easy-balanced spawn rate
+    const baseRate = 1.2 + gameTime / 60 * 0.6 + Math.floor(gameTime / 60) * 0.3;
     spawnTimer += dt * baseRate;
     while (spawnTimer >= 1) {
         spawnTimer -= 1;
@@ -881,7 +885,7 @@ function updateSpawning(dt) {
     }
     // Wave burst every 30 seconds - big swarm
     if (Math.floor(gameTime) % 30 === 0 && Math.floor(gameTime) !== Math.floor(gameTime - dt)) {
-        const burstCount = 5 + Math.floor(gameTime / 60) * 2;
+        const burstCount = 4 + Math.floor(gameTime / 60);
         for (let i = 0; i < burstCount; i++) {
             const a = (i / burstCount) * Math.PI * 2;
             spawnEnemy(0, player.x + Math.cos(a)*400, player.y + Math.sin(a)*400);
@@ -1014,7 +1018,11 @@ function updateEnemies(dt) {
 
 function damagePlayer(dmg) {
     if (player.iframes > 0) return;
-    if (Math.random() < player.dodge) { spawnDmgNum(player.x, player.y-20, 0, '#88FFFF'); return; }
+    if (Math.random() < player.dodge) {
+        dmgNums.push({ x: player.x, y: player.y-20, val: '회피!', vy: -50, life: 0.8, color: '#88FFFF', text: true });
+        spawnParticles(player.x, player.y, '#88FFFF', 5, 30);
+        return;
+    }
     player.hp -= dmg;
     player.iframes = 0.5;
     screenFlash = 0.15; screenFlashColor = '#FF0000';
@@ -1514,13 +1522,17 @@ function update(dt) {
     screenFlash = Math.max(0, screenFlash - dt * 2);
     for (const e of enemies) { if (e.hitFlash) e.hitFlash = Math.max(0, e.hitFlash - dt * 8); }
 
-    // Regen (산삼)
+    // Regen (산삼) - much faster & visible
     const regenPas = player.passives.find(p => p.id === 4);
     if (regenPas) {
         player.regenTimer += dt;
-        if (player.regenTimer >= 30 / regenPas.level) {
+        const regenInterval = 3 / regenPas.level; // 3초/lv (lv1=3초, lv5=0.6초)
+        const regenAmount = 3 + regenPas.level * 2; // lv1=5, lv5=13
+        if (player.regenTimer >= regenInterval && player.hp < player.maxHp) {
             player.regenTimer = 0;
-            player.hp = Math.min(player.maxHp, player.hp + PASSIVES[4].val);
+            player.hp = Math.min(player.maxHp, player.hp + regenAmount);
+            spawnDmgNum(player.x, player.y - 30, regenAmount, '#44FF44');
+            spawnParticles(player.x, player.y, '#44FF44', 3, 20);
         }
     }
 

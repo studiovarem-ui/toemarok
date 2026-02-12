@@ -738,11 +738,8 @@ function drawThunder(x, y) {
 
 function drawExpOrb(x, y) {
     const glow = Math.sin(t * 4) * 0.3 + 0.7;
-    ctx.shadowColor = '#00FF88';
-    ctx.shadowBlur = 8;
-    ctx.globalAlpha = glow * 0.4; circ(x, y, 9, '#00FF88'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = glow * 0.3; circ(x, y, 8, '#00FF88'); ctx.globalAlpha = 1;
     circ(x, y, 4, '#00CC66'); circ(x, y, 3, '#00FF88'); circ(x, y-1, 1.5, '#AAFFCC');
-    ctx.shadowBlur = 0;
 }
 
 const charDrawFns = [drawExorcist, drawMunyeo, drawJeonwoochi, drawHonggildong, drawJanggun, drawSanshin];
@@ -752,36 +749,31 @@ const enemyDrawFns = [drawJapgwi, drawDokkaebul, drawMulgwisin, drawYacha, drawG
 // ============================================
 // MAP DRAWING
 // ============================================
-// Background image (1024x1024, stretched to cover full map)
-const bgImg = new Image();
-bgImg.src = 'bg.jpg';
-let bgLoaded = false;
-bgImg.onload = () => { bgLoaded = true; };
-const MAP_WORLD = 2000; // map spans -1000 to +1000
-
 function drawMap(camX, camY) {
-    if (bgLoaded) {
-        // Draw single image stretched to cover entire map area
-        const worldX = -MAP_WORLD / 2;
-        const worldY = -MAP_WORLD / 2;
-        const sx = worldX - camX + W / 2;
-        const sy = worldY - camY + H / 2;
-        ctx.drawImage(bgImg, sx, sy, MAP_WORLD, MAP_WORLD);
-        // Darken background slightly for character visibility
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.fillRect(sx, sy, MAP_WORLD, MAP_WORLD);
-    } else {
-        ctx.fillStyle = '#3a5a2a';
-        ctx.fillRect(0, 0, W, H);
+    const tileW = 40, tileH = 40;
+    const startX = Math.floor((camX - W/2) / tileW) - 1;
+    const startY = Math.floor((camY - H/2) / tileH) - 1;
+    const endX = startX + Math.ceil(W / tileW) + 3;
+    const endY = startY + Math.ceil(H / tileH) + 3;
+    for (let ty = startY; ty <= endY; ty++) {
+        for (let tx = startX; tx <= endX; tx++) {
+            const sx = tx * tileW - camX + W/2;
+            const sy = ty * tileH - camY + H/2;
+            const hash = ((tx * 7 + ty * 13) & 0xFF);
+            const r = 140 + (hash & 15); const g = 115 + (hash & 15); const b = 85 + (hash & 7);
+            px(sx, sy, tileW, tileH, `rgb(${r},${g},${b})`);
+            if (hash % 17 === 0) { px(sx+10, sy+15, 3, 2, `rgb(${r-15},${g-15},${b-10})`); }
+            if (hash % 23 === 0) { circ(sx+25, sy+20, 2, '#5a7a3a'); }
+        }
     }
     // Map boundary markers
-    const mapR = 1000;
-    const edgeDist = Math.sqrt(camX * camX + camY * camY);
+    const mapR = 1200;
+    const edgeDist = Math.sqrt(camX*camX + camY*camY);
     if (edgeDist > mapR - 250) {
         ctx.strokeStyle = 'rgba(255,0,0,0.3)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(W / 2 - camX, H / 2 - camY, mapR, 0, Math.PI * 2);
+        ctx.arc(W/2 - camX, H/2 - camY, mapR, 0, Math.PI*2);
         ctx.stroke();
     }
 }
@@ -1133,7 +1125,7 @@ function updateEnemies(dt) {
         }
 
         // Clamp to map
-        const mapR = 1000;
+        const mapR = 1200;
         const eDist = Math.sqrt(e.x*e.x + e.y*e.y);
         if (eDist > mapR) { e.x *= mapR/eDist; e.y *= mapR/eDist; }
 
@@ -1741,7 +1733,7 @@ function update(dt) {
     }
 
     // Map boundary
-    const mapR = 1000;
+    const mapR = 1200;
     const pDist = Math.sqrt(player.x*player.x+player.y*player.y);
     if (pDist > mapR) { player.x *= mapR/pDist; player.y *= mapR/pDist; }
 
@@ -1942,25 +1934,17 @@ function drawGame() {
             ctx.globalAlpha = 1;
         }
         if (e.isBoss) {
-            // Boss outline glow
-            ctx.shadowColor = '#FF0000';
-            ctx.shadowBlur = 12;
             if (e.type === 98) drawGwiwang(sx, sy, t*3);
             else if (e.type === 97) drawDokkaebiKing(sx, sy, t*3);
             else drawGumihoKing(sx, sy, t*3);
-            ctx.shadowBlur = 0;
             // Boss HP bar - big
             const bhw = 80, bhh = 6;
             px(sx-bhw/2, sy-50, bhw, bhh, '#111');
             px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), bhh-2, '#FF2222');
             px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), 1, '#FF6666');
         } else {
-            // Enemy outline for visibility
-            ctx.shadowColor = '#FF4444';
-            ctx.shadowBlur = 6;
             const drawFn2 = enemyDrawFns[e.type];
             if (drawFn2) drawFn2(sx, sy, t*3);
-            ctx.shadowBlur = 0;
             // Small HP bar for damaged enemies
             if (e.hp < e.maxHp) {
                 const hw = 16, hh = 2;
@@ -1973,12 +1957,8 @@ function drawGame() {
     // Player
     const psx = W/2, psy = H/2;
     if (player.iframes > 0 && Math.floor(t*15)%2===0) ctx.globalAlpha = 0.3;
-    // Player outline glow for visibility
-    ctx.shadowColor = '#FFFFFF';
-    ctx.shadowBlur = 8;
     const drawFn = charDrawFns[player.charIdx];
     if (drawFn) drawFn(psx, psy, player.frame);
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     // Particles

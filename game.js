@@ -87,7 +87,7 @@ let state = 'title'; // title, charSelect, playing, levelUp, gameOver
 let selectedChar = 0;
 let player, enemies, projectiles, orbs, particles, dmgNums;
 let gameTime, kills, spawnTimer, bossSpawned1, bossSpawned2;
-let bombCooldown, lastTime;
+let bombCooldown, lastTime, screenFlash = 0, screenFlashColor = '#FFF';
 
 const CHARS = [
     { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:100, spd:120, atk:1.0, range:40 },
@@ -786,14 +786,14 @@ function computePlayerStats() {
 // ENEMY SPAWNING
 // ============================================
 const ENEMY_DEFS = [
-    { name:'잡귀', hp:3, spd:60, dmg:5, radius:10, exp:3, pattern:'straight', minTime:0 },
-    { name:'도깨불', hp:5, spd:40, dmg:8, radius:8, exp:5, pattern:'zigzag', minTime:60 },
-    { name:'물귀신', hp:8, spd:32, dmg:7, radius:10, exp:6, pattern:'aimed', minTime:180 },
-    { name:'야차', hp:6, spd:100, dmg:10, radius:9, exp:8, pattern:'swooper', minTime:240 },
-    { name:'강시', hp:20, spd:20, dmg:12, radius:12, exp:10, pattern:'tank', minTime:360 },
-    { name:'원귀', hp:8, spd:12, dmg:6, radius:10, exp:8, pattern:'sniper', minTime:480 },
-    { name:'삼두구', hp:4, spd:48, dmg:6, radius:10, exp:5, pattern:'formation', minTime:600 },
-    { name:'이무기', hp:15, spd:40, dmg:10, radius:12, exp:12, pattern:'spiral', minTime:720 },
+    { name:'잡귀', hp:3, spd:90, dmg:5, radius:10, exp:3, pattern:'straight', minTime:0 },
+    { name:'도깨불', hp:5, spd:70, dmg:8, radius:8, exp:5, pattern:'zigzag', minTime:30 },
+    { name:'물귀신', hp:8, spd:55, dmg:7, radius:10, exp:6, pattern:'aimed', minTime:90 },
+    { name:'야차', hp:6, spd:140, dmg:10, radius:9, exp:8, pattern:'swooper', minTime:150 },
+    { name:'강시', hp:20, spd:40, dmg:12, radius:12, exp:10, pattern:'tank', minTime:210 },
+    { name:'원귀', hp:8, spd:25, dmg:6, radius:10, exp:8, pattern:'sniper', minTime:270 },
+    { name:'삼두구', hp:4, spd:80, dmg:6, radius:10, exp:5, pattern:'formation', minTime:330 },
+    { name:'이무기', hp:15, spd:65, dmg:10, radius:12, exp:12, pattern:'spiral', minTime:400 },
 ];
 
 function spawnEnemy(typeIdx, px2, py2) {
@@ -834,16 +834,16 @@ function spawnBoss(type) {
 }
 
 function updateSpawning(dt) {
-    const baseRate = 0.8 + gameTime / 60 * 0.3;
+    // Much higher spawn rate: starts at 3/sec, ramps up fast
+    const baseRate = 3 + gameTime / 30 * 1.5 + Math.floor(gameTime / 60) * 0.8;
     spawnTimer += dt * baseRate;
-    if (spawnTimer >= 1) {
+    while (spawnTimer >= 1) {
         spawnTimer -= 1;
         const available = [];
         for (let i = 0; i < ENEMY_DEFS.length; i++) {
             if (gameTime >= ENEMY_DEFS[i].minTime) available.push(i);
         }
         if (available.length > 0) {
-            // Weighted: newer enemies have higher weight
             const weights = available.map((idx, i) => 1 + i * 0.5);
             const totalW = weights.reduce((a,b)=>a+b,0);
             let r = Math.random() * totalW;
@@ -852,7 +852,7 @@ function updateSpawning(dt) {
                 r -= weights[i];
                 if (r <= 0) { chosen = available[i]; break; }
             }
-            if (chosen === 6) { // formation - spawn 3
+            if (chosen === 6) {
                 const ang = Math.random() * Math.PI * 2;
                 for (let j = 0; j < 3; j++) {
                     const d = 380;
@@ -864,6 +864,16 @@ function updateSpawning(dt) {
             }
         }
     }
+    // Wave burst every 30 seconds - big swarm
+    if (Math.floor(gameTime) % 30 === 0 && Math.floor(gameTime) !== Math.floor(gameTime - dt)) {
+        const burstCount = 8 + Math.floor(gameTime / 30) * 3;
+        for (let i = 0; i < burstCount; i++) {
+            const a = (i / burstCount) * Math.PI * 2;
+            spawnEnemy(0, player.x + Math.cos(a)*400, player.y + Math.sin(a)*400);
+        }
+    }
+    // Cap max enemies for performance
+    while (enemies.length > 200) { enemies.shift(); }
     // Boss spawns
     if (gameTime >= 450 && !bossSpawned1) { bossSpawned1 = true; spawnBoss(1); }
     if (gameTime >= 900 && !bossSpawned2) { bossSpawned2 = true; spawnBoss(2); }
@@ -992,8 +1002,9 @@ function damagePlayer(dmg) {
     if (Math.random() < player.dodge) { spawnDmgNum(player.x, player.y-20, 0, '#88FFFF'); return; }
     player.hp -= dmg;
     player.iframes = 0.5;
+    screenFlash = 0.15; screenFlashColor = '#FF0000';
     spawnDmgNum(player.x, player.y - 20, dmg, '#FF4444');
-    spawnParticles(player.x, player.y, '#FF4444', 5, 40);
+    spawnParticles(player.x, player.y, '#FF4444', 8, 50);
     playSound('hit');
     if (player.hp <= 0) {
         player.hp = 0;
@@ -1007,19 +1018,22 @@ function damagePlayer(dmg) {
 
 function killEnemy(idx) {
     const e = enemies[idx];
-    spawnParticles(e.x, e.y, e.isBoss ? '#FFD700' : enemyColor(e.type), 10, 60);
+    const col = e.isBoss ? '#FFD700' : enemyColor(e.type);
+    // Big death explosion
+    spawnParticles(e.x, e.y, col, 15, 80);
+    spawnParticles(e.x, e.y, '#FFFFFF', 5, 50);
+    // Screen flash for bosses
+    if (e.isBoss) { screenFlash = 0.3; screenFlashColor = '#FFD700'; }
     playSound('kill');
     kills++;
-    // Drop exp
+    // Drop exp orbs (multiple for tough enemies)
     const expVal = e.exp * player.expMul;
-    orbs.push({ x: e.x, y: e.y, val: expVal, life: 15 });
-    enemies.splice(idx, 1);
-
-    // Check win condition (boss2 killed)
-    if (e.type === 99) {
-        saveData.totalClears++;
-        writeSave();
+    const orbCount = e.isBoss ? 8 : (e.exp >= 8 ? 3 : 1);
+    for (let oi = 0; oi < orbCount; oi++) {
+        orbs.push({ x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, val: expVal/orbCount, life: 15 });
     }
+    enemies.splice(idx, 1);
+    if (e.type === 99) { saveData.totalClears++; writeSave(); }
 }
 
 function enemyColor(type) {
@@ -1065,7 +1079,7 @@ function fireWeapons(dt) {
                 const spread = 0.15;
                 for (let i = 0; i < count; i++) {
                     const ang = Math.atan2(aimY, aimX) + (i - (count-1)/2) * spread;
-                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang)*200, vy: Math.sin(ang)*200, dmg, life: 1.5, radius: 5, enemy: false, color: w.evolved ? '#AA44FF' : '#FF4444', critColor, evolved: w.evolved });
+                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, dmg, life: 1.5, radius: 8, enemy: false, color: w.evolved ? '#AA44FF' : '#FF4444', critColor, evolved: w.evolved });
                 }
                 break;
             }
@@ -1079,10 +1093,10 @@ function fireWeapons(dt) {
                 for (const tgt of targets) {
                     const adx = tgt.x - player.x, ady = tgt.y - player.y;
                     const ad2 = Math.sqrt(adx*adx+ady*ady)||1;
-                    projectiles.push({ x: player.x, y: player.y, vx: adx/ad2*150, vy: ady/ad2*150, dmg, life: 2, radius: 4, enemy: false, color: '#FFD700', homing: true, target: tgt, critColor });
+                    projectiles.push({ x: player.x, y: player.y, vx: adx/ad2*160, vy: ady/ad2*160, dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', homing: true, target: tgt, critColor });
                 }
                 if (targets.length === 0 && nearEnemy) {
-                    projectiles.push({ x: player.x, y: player.y, vx: aimX*150, vy: aimY*150, dmg, life: 2, radius: 4, enemy: false, color: '#FFD700', critColor });
+                    projectiles.push({ x: player.x, y: player.y, vx: aimX*160, vy: aimY*160, dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', critColor });
                 }
                 break;
             }
@@ -1149,7 +1163,7 @@ function fireWeapons(dt) {
                 const spread2 = 0.1;
                 for (let i = 0; i < count; i++) {
                     const ang2 = Math.atan2(aimY, aimX) + (i - (count-1)/2) * spread2;
-                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang2)*300, vy: Math.sin(ang2)*300, dmg, life: 2, radius: 3, enemy: false, color: '#88CCFF', pierce: w.level >= 5 ? 999 : w.level, critColor });
+                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang2)*300, vy: Math.sin(ang2)*300, dmg, life: 2, radius: 6, enemy: false, color: '#88CCFF', pierce: w.level >= 5 ? 999 : w.level, critColor });
                 }
                 break;
             }
@@ -1269,8 +1283,9 @@ function updateProjectiles(dt) {
                 const d = Math.sqrt((e.x-p.x)**2+(e.y-p.y)**2);
                 if (d < p.radius + e.radius) {
                     e.hp -= p.dmg;
+                    e.hitFlash = 0.15;
                     spawnDmgNum(e.x, e.y - 10, p.dmg, p.critColor || p.color);
-                    spawnParticles(e.x, e.y, p.color, 2, 20);
+                    spawnParticles(e.x, e.y, p.color, 3, 30);
                     if (p.evolved) { // 봉인진 - kill explosion
                         if (e.hp <= 0) {
                             for (const e2 of enemies) {
@@ -1459,6 +1474,8 @@ function update(dt) {
     gameTime += dt;
     player.iframes = Math.max(0, player.iframes - dt);
     bombCooldown = Math.max(0, bombCooldown - dt);
+    screenFlash = Math.max(0, screenFlash - dt * 2);
+    for (const e of enemies) { if (e.hitFlash) e.hitFlash = Math.max(0, e.hitFlash - dt * 8); }
 
     // Regen (산삼)
     const regenPas = player.passives.find(p => p.id === 4);
@@ -1490,6 +1507,7 @@ function update(dt) {
     if (input.bomb && bombCooldown <= 0) {
         bombCooldown = 30;
         playSound('bomb');
+        screenFlash = 0.5; screenFlashColor = '#FFD700';
         spawnParticles(player.x, player.y, '#FFD700', 30, 120);
         for (const e of enemies) {
             if (!e.isBoss) { e.hp -= 50; spawnDmgNum(e.x, e.y-10, 50, '#FFD700'); }
@@ -1527,19 +1545,133 @@ function drawGame() {
         drawExpOrb(sx, sy);
     }
 
-    // Projectiles
+    // Projectiles - fancy rendering
     for (const p of projectiles) {
         const sx = p.x - camX + W/2, sy = p.y - camY + H/2;
-        if (sx < -20 || sx > W+20 || sy < -20 || sy > H+20) continue;
+        if (sx < -30 || sx > W+30 || sy < -30 || sy > H+30) continue;
         if (p.zone) {
-            ctx.globalAlpha = 0.3;
-            circ(sx, sy, p.radius, p.color);
+            // Pulsing zone with inner ring
+            const pulse = Math.sin(t * 6) * 0.1 + 0.9;
+            ctx.globalAlpha = 0.15;
+            circ(sx, sy, p.radius * pulse, p.color);
+            ctx.globalAlpha = 0.35;
+            circ(sx, sy, p.radius * 0.6 * pulse, p.color);
             ctx.globalAlpha = 0.6;
-            circ(sx, sy, p.radius * 0.6, p.color);
+            ctx.strokeStyle = p.color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sx, sy, p.radius * pulse, 0, Math.PI*2); ctx.stroke();
             ctx.globalAlpha = 1;
+        } else if (p.color === '#FF4444' || p.color === '#AA44FF') {
+            // 부적 - spinning talisman card
+            ctx.save(); ctx.translate(sx, sy);
+            const rot = Math.atan2(p.vy, p.vx);
+            ctx.rotate(rot);
+            // Card shape
+            px(-4, -6, 8, 12, p.color);
+            px(-3, -5, 6, 10, '#FFD700');
+            // Symbols
+            px(-1, -3, 2, 1, '#000'); px(-2, -1, 4, 1, '#000'); px(-1, 1, 2, 1, '#000');
+            // Trail glow
+            ctx.globalAlpha = 0.4;
+            circ(-8, 0, 5, p.color);
+            ctx.globalAlpha = 0.2;
+            circ(-14, 0, 4, p.color);
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        } else if (p.color === '#FFD700' && p.homing) {
+            // 방울 - golden bell with sound waves
+            ctx.save(); ctx.translate(sx, sy);
+            circ(0, 0, 5, '#FFD700');
+            circ(0, -1, 3, '#FFEC8B');
+            circ(0, -2, 1.5, '#FFF');
+            // Sound wave rings
+            const wave = (t * 8) % 1;
+            ctx.globalAlpha = 1 - wave;
+            ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(0, 0, 6 + wave * 12, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 0.5 * (1 - wave);
+            ctx.beginPath(); ctx.arc(0, 0, 10 + wave * 12, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        } else if (p.color === '#FF6600' || p.color === '#FF4400') {
+            // 여우불 / 용 숨결 - flickering fire
+            const fl = Math.sin(t * 12 + sx) * 2;
+            ctx.globalAlpha = 0.25; circ(sx, sy, p.radius * 2.5 + fl, '#FF4400'); ctx.globalAlpha = 1;
+            circ(sx, sy, p.radius + 2, '#FF4400');
+            circ(sx, sy, p.radius, '#FF8844');
+            circ(sx, sy, p.radius * 0.6, '#FFCC44');
+            circ(sx, sy, p.radius * 0.3, '#FFFFFF');
+            // Ember particles
+            for (let j = 0; j < 2; j++) {
+                const ea = t * 5 + j * 3 + sx * 0.1;
+                ctx.globalAlpha = 0.5;
+                circ(sx + Math.sin(ea)*5, sy + Math.cos(ea)*5 - 3, 1.5, '#FFAA00');
+            }
+            ctx.globalAlpha = 1;
+        } else if (p.color === '#FFDD00') {
+            // 천둥 - lightning bolt flash
+            ctx.save(); ctx.translate(sx, sy);
+            ctx.globalAlpha = 0.3; circ(0, 0, 15, '#FFDD00'); ctx.globalAlpha = 1;
+            ctx.fillStyle = '#FFDD00';
+            ctx.beginPath();
+            ctx.moveTo(-3, -8); ctx.lineTo(1, -2); ctx.lineTo(-1, -2);
+            ctx.lineTo(3, 5); ctx.lineTo(-1, 0); ctx.lineTo(1, 0);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.moveTo(-1, -5); ctx.lineTo(1, -1); ctx.lineTo(0, -1); ctx.lineTo(2, 3);
+            ctx.closePath(); ctx.fill();
+            ctx.restore();
+        } else if (p.color === '#88CCFF') {
+            // 신궁 - arrow with speed lines
+            ctx.save(); ctx.translate(sx, sy);
+            const rot2 = Math.atan2(p.vy, p.vx);
+            ctx.rotate(rot2);
+            // Arrow body
+            ctx.fillStyle = '#88CCFF';
+            ctx.beginPath();
+            ctx.moveTo(8, 0); ctx.lineTo(-4, -3); ctx.lineTo(-2, 0); ctx.lineTo(-4, 3);
+            ctx.closePath(); ctx.fill();
+            // Speed lines
+            ctx.globalAlpha = 0.4;
+            px(-12, -1, 8, 1, '#88CCFF');
+            ctx.globalAlpha = 0.2;
+            px(-18, 1, 6, 1, '#88CCFF');
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        } else if (p.color === '#00AAFF') {
+            // 청룡 (evolved dragon breath) - big blue dragon
+            ctx.save(); ctx.translate(sx, sy);
+            const rot3 = Math.atan2(p.vy, p.vx);
+            ctx.rotate(rot3);
+            ctx.globalAlpha = 0.2; circ(0, 0, p.radius*2, '#00AAFF'); ctx.globalAlpha = 1;
+            circ(8, 0, p.radius*0.8, '#00AAFF');
+            circ(3, 0, p.radius, '#0088DD');
+            circ(-3, 0, p.radius*0.8, '#0066BB');
+            px(12, -3, 3, 2, '#FFDD00'); px(12, 1, 3, 2, '#FFDD00'); // eyes
+            ctx.restore();
+        } else if (p.color === '#AAAAFF') {
+            // 귀살검 - slash arc
+            ctx.save(); ctx.translate(sx, sy);
+            const rot4 = Math.atan2(p.vy, p.vx);
+            ctx.rotate(rot4);
+            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = '#CCCCFF'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(0, 0, 12, -0.8, 0.8); ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(0, 0, 12, -0.5, 0.5); ctx.stroke();
+            ctx.restore();
+        } else if (p.enemy && p.color === '#FF4488') {
+            // Enemy sniper shot - spinning shard
+            ctx.save(); ctx.translate(sx, sy); ctx.rotate(t * 8);
+            px(-3, -3, 6, 6, '#FF4488');
+            px(-2, -2, 4, 4, '#FF88AA');
+            ctx.restore();
         } else {
+            // Default - glowing orb with trail
+            ctx.globalAlpha = 0.3; circ(sx, sy, p.radius * 2, p.color); ctx.globalAlpha = 1;
             circ(sx, sy, p.radius, p.color);
-            if (p.radius > 10) { ctx.globalAlpha = 0.3; circ(sx, sy, p.radius*1.5, p.color); ctx.globalAlpha = 1; }
+            circ(sx, sy, p.radius * 0.5, '#FFF');
         }
     }
 
@@ -1547,16 +1679,29 @@ function drawGame() {
     for (const e of enemies) {
         const sx = e.x - camX + W/2, sy = e.y - camY + H/2;
         if (sx < -40 || sx > W+40 || sy < -50 || sy > H+50) continue;
+        // Hit flash
+        if (e.hitFlash && e.hitFlash > 0) {
+            ctx.globalAlpha = 0.7;
+            circ(sx, sy, e.radius + 3, '#FFF');
+            ctx.globalAlpha = 1;
+        }
         if (e.isBoss) {
             if (e.type === 98) drawGwiwang(sx, sy, t*3);
             else drawGumihoKing(sx, sy, t*3);
-            // Boss HP bar
-            const bhw = 60, bhh = 4;
-            px(sx-bhw/2, sy-45, bhw, bhh, '#333');
-            px(sx-bhw/2, sy-45, bhw*(e.hp/e.maxHp), bhh, '#FF2222');
+            // Boss HP bar - big
+            const bhw = 80, bhh = 6;
+            px(sx-bhw/2, sy-50, bhw, bhh, '#111');
+            px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), bhh-2, '#FF2222');
+            px(sx-bhw/2+1, sy-49, (bhw-2)*(e.hp/e.maxHp), 1, '#FF6666');
         } else {
-            const drawFn = enemyDrawFns[e.type];
-            if (drawFn) drawFn(sx, sy, t*3);
+            const drawFn2 = enemyDrawFns[e.type];
+            if (drawFn2) drawFn2(sx, sy, t*3);
+            // Small HP bar for damaged enemies
+            if (e.hp < e.maxHp) {
+                const hw = 16, hh = 2;
+                px(sx-hw/2, sy-e.radius-6, hw, hh, '#333');
+                px(sx-hw/2, sy-e.radius-6, hw*(e.hp/e.maxHp), hh, '#FF4444');
+            }
         }
     }
 
@@ -1602,6 +1747,15 @@ function drawGame() {
         px(ix-9, iconY-9, 20, 20, w.evolved ? '#442266' : '#333');
         txt(WEAPONS[w.id].name[0], ix, iconY-8, WEAPONS[w.id].color, 10);
         txt(`${w.level}`, ix, iconY+5, '#888', 7);
+    }
+    // Kill counter combo flash
+    txt(`${enemies.length} 요괴`, W/2, 8, '#666', 8);
+    // Screen flash effect
+    if (screenFlash > 0) {
+        ctx.globalAlpha = screenFlash;
+        ctx.fillStyle = screenFlashColor;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
     }
 }
 

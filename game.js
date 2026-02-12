@@ -83,11 +83,12 @@ loadSave();
 // ============================================
 // GAME STATE
 // ============================================
-let state = 'title'; // title, charSelect, playing, levelUp, gameOver
+let state = 'title'; // title, charSelect, playing, levelUp, gameOver, victory
 let selectedChar = 0;
 let player, enemies, projectiles, orbs, particles, dmgNums;
 let gameTime, kills, spawnTimer, bossSpawned1, bossSpawned2;
 let bombCooldown, lastTime, screenFlash = 0, screenFlashColor = '#FFF';
+let enemyIdCounter = 0; // Unique ID for each enemy
 
 const CHARS = [
     { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:150, spd:130, atk:1.2, range:50 },
@@ -155,7 +156,7 @@ touchArea.addEventListener('touchstart', e => {
     const t2 = e.touches[0];
     const pos = screenToCanvas(t2.clientX, t2.clientY);
     // Menu states: handle as tap
-    if (state === 'title' || state === 'charSelect' || state === 'levelUp' || state === 'gameOver') {
+    if (state === 'title' || state === 'charSelect' || state === 'levelUp' || state === 'gameOver' || state === 'victory') {
         handleTap(pos.x, pos.y);
         return;
     }
@@ -827,6 +828,7 @@ function spawnEnemy(typeIdx, px2, py2) {
         sy = player.y + Math.sin(angle) * dist;
     }
     enemies.push({
+        uid: ++enemyIdCounter,
         x: sx, y: sy, type: typeIdx, hp: def.hp * hpScale, maxHp: def.hp * hpScale,
         spd: def.spd, dmg: def.dmg, radius: def.radius, exp: def.exp,
         pattern: def.pattern, timer: 0, phase: 0, angle: Math.random()*Math.PI*2,
@@ -840,6 +842,7 @@ function spawnBoss(type) {
     const bx = player.x + Math.cos(angle) * dist;
     const by = player.y + Math.sin(angle) * dist;
     const boss = {
+        uid: ++enemyIdCounter,
         x: bx, y: by, type: type === 1 ? 98 : 99,
         hp: type === 1 ? 200 : 500, maxHp: type === 1 ? 200 : 500,
         spd: type === 1 ? 35 : 30, dmg: type === 1 ? 12 : 15,
@@ -891,8 +894,15 @@ function updateSpawning(dt) {
             spawnEnemy(0, player.x + Math.cos(a)*400, player.y + Math.sin(a)*400);
         }
     }
-    // Cap max enemies for performance
-    while (enemies.length > 200) { enemies.shift(); }
+    // Cap max enemies for performance (remove furthest ones)
+    if (enemies.length > 200) {
+        enemies.sort((a, b) => {
+            const da = (a.x-player.x)**2+(a.y-player.y)**2;
+            const db = (b.x-player.x)**2+(b.y-player.y)**2;
+            return da - db;
+        });
+        while (enemies.length > 200) enemies.pop();
+    }
     // Boss spawns
     if (gameTime >= 450 && !bossSpawned1) { bossSpawned1 = true; spawnBoss(1); }
     if (gameTime >= 900 && !bossSpawned2) { bossSpawned2 = true; spawnBoss(2); }
@@ -1056,7 +1066,14 @@ function killEnemy(idx) {
         orbs.push({ x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, val: expVal/orbCount, life: 15 });
     }
     enemies.splice(idx, 1);
-    if (e.type === 99) { saveData.totalClears++; writeSave(); }
+    if (e.type === 99) {
+        saveData.totalClears++;
+        if (gameTime > saveData.bestTime) saveData.bestTime = gameTime;
+        if (kills > saveData.bestKills) saveData.bestKills = kills;
+        writeSave();
+        state = 'victory';
+        screenFlash = 1.0; screenFlashColor = '#FFD700';
+    }
 }
 
 function enemyColor(type) {
@@ -1079,9 +1096,12 @@ function fireWeapons(dt) {
         w.cd = cd;
 
         const baseDmg = (5 + w.level * 3) * player.atkMul;
-        const isCrit = Math.random() < player.crit;
-        const dmg = isCrit ? baseDmg * 2 : baseDmg;
-        const critColor = isCrit ? '#FFDD00' : null;
+        // Roll crit per-hit for projectiles, per-fire for instant-hit weapons
+        function rollCrit() {
+            const isCrit = Math.random() < player.crit;
+            return { dmg: isCrit ? baseDmg * 2 : baseDmg, critColor: isCrit ? '#FFDD00' : null, isCrit };
+        }
+        const { dmg, critColor } = rollCrit();
 
         // Find nearest enemy for targeting
         let nearDist = Infinity, nearEnemy = null;
@@ -1101,8 +1121,9 @@ function fireWeapons(dt) {
                 const count = w.evolved ? 7 : w.level;
                 const spread = 0.15;
                 for (let i = 0; i < count; i++) {
+                    const c = rollCrit();
                     const ang = Math.atan2(aimY, aimX) + (i - (count-1)/2) * spread;
-                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, dmg, life: 1.5, radius: 8, enemy: false, color: w.evolved ? '#AA44FF' : '#FF4444', critColor, evolved: w.evolved });
+                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang)*220, vy: Math.sin(ang)*220, dmg: c.dmg, life: 1.5, radius: 8, enemy: false, color: w.evolved ? '#AA44FF' : '#FF4444', critColor: c.critColor, evolved: w.evolved });
                 }
                 break;
             }
@@ -1114,12 +1135,14 @@ function fireWeapons(dt) {
                     return da - db;
                 }).slice(0, count);
                 for (const tgt of targets) {
+                    const c = rollCrit();
                     const adx = tgt.x - player.x, ady = tgt.y - player.y;
                     const ad2 = Math.sqrt(adx*adx+ady*ady)||1;
-                    projectiles.push({ x: player.x, y: player.y, vx: adx/ad2*160, vy: ady/ad2*160, dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', homing: true, target: tgt, critColor });
+                    projectiles.push({ x: player.x, y: player.y, vx: adx/ad2*160, vy: ady/ad2*160, dmg: c.dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', homing: true, target: tgt, critColor: c.critColor });
                 }
                 if (targets.length === 0 && nearEnemy) {
-                    projectiles.push({ x: player.x, y: player.y, vx: aimX*160, vy: aimY*160, dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', critColor });
+                    const c = rollCrit();
+                    projectiles.push({ x: player.x, y: player.y, vx: aimX*160, vy: aimY*160, dmg: c.dmg, life: 2, radius: 7, enemy: false, color: '#FFD700', critColor: c.critColor });
                 }
                 break;
             }
@@ -1167,10 +1190,11 @@ function fireWeapons(dt) {
                 let targets2 = [...enemies].sort(() => Math.random()-0.5).slice(0, count);
                 let lastX = player.x, lastY = player.y;
                 for (const tgt of targets2) {
-                    tgt.hp -= dmg;
-                    spawnDmgNum(tgt.x, tgt.y - 10, dmg, critColor || '#FFDD00');
+                    const c = rollCrit();
+                    tgt.hp -= c.dmg;
+                    spawnDmgNum(tgt.x, tgt.y - 10, c.dmg, c.critColor || '#FFDD00', c.isCrit);
                     spawnParticles(tgt.x, tgt.y, '#FFDD00', 5, 50);
-                    if (w.evolved) { tgt.spd *= 0.5; setTimeout(() => { if(tgt) tgt.spd *= 2; }, 1500); }
+                    if (w.evolved && !tgt.slowed) { tgt.slowed = 1.5; tgt.origSpd = tgt.spd; tgt.spd *= 0.5; }
                     lastX = tgt.x; lastY = tgt.y;
                 }
                 break;
@@ -1179,8 +1203,9 @@ function fireWeapons(dt) {
                 const count = w.evolved ? 3 : Math.min(w.level, 3);
                 const spread2 = 0.1;
                 for (let i = 0; i < count; i++) {
+                    const c = rollCrit();
                     const ang2 = Math.atan2(aimY, aimX) + (i - (count-1)/2) * spread2;
-                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang2)*300, vy: Math.sin(ang2)*300, dmg, life: 2, radius: 6, enemy: false, color: '#88CCFF', pierce: w.level >= 5 ? 999 : w.level, critColor });
+                    projectiles.push({ x: player.x, y: player.y, vx: Math.cos(ang2)*300, vy: Math.sin(ang2)*300, dmg: c.dmg, life: 2, radius: 6, enemy: false, color: '#88CCFF', pierce: w.level >= 5 ? 999 : w.level, critColor: c.critColor });
                 }
                 break;
             }
@@ -1258,16 +1283,23 @@ function updateProjectiles(dt) {
                     const d = Math.sqrt((e.x-p.x)**2+(e.y-p.y)**2);
                     if (d < p.radius + e.radius) {
                         if (!p._tick) p._tick = {};
-                        if (!p._tick[j] || p._tick[j] < t - 0.3) {
-                            p._tick[j] = t;
+                        const eid = e.uid;
+                        if (!p._tick[eid] || p._tick[eid] < t - 0.3) {
+                            p._tick[eid] = t;
                             e.hp -= p.dmg;
                             spawnDmgNum(e.x, e.y-10, p.dmg, p.critColor || p.color);
                         }
                     }
                 }
             } else {
+                // Enemy zone: deal tick damage every 0.5s instead of per-frame
                 const d = Math.sqrt((player.x-p.x)**2+(player.y-p.y)**2);
-                if (d < p.radius + 10) damagePlayer(p.dmg * dt);
+                if (d < p.radius + 10) {
+                    if (!p._ptick || p._ptick < t - 0.5) {
+                        p._ptick = t;
+                        damagePlayer(p.dmg);
+                    }
+                }
             }
             continue;
         }
@@ -1283,8 +1315,9 @@ function updateProjectiles(dt) {
                 const d = Math.sqrt((e.x-p.x)**2+(e.y-p.y)**2);
                 if (d < p.radius + e.radius) {
                     if (!p._tick) p._tick = {};
-                    if (!p._tick[j] || p._tick[j] < t - 0.25) {
-                        p._tick[j] = t;
+                    const eid = e.uid;
+                    if (!p._tick[eid] || p._tick[eid] < t - 0.25) {
+                        p._tick[eid] = t;
                         e.hp -= p.dmg;
                         e.hitFlash = 0.15;
                         spawnDmgNum(e.x, e.y-10, p.dmg, p.critColor || '#8B4513');
@@ -1302,11 +1335,22 @@ function updateProjectiles(dt) {
 
         // Homing
         if (p.homing && p.target && !p.enemy) {
-            const tdx = p.target.x - p.x, tdy = p.target.y - p.y;
-            const td = Math.sqrt(tdx*tdx+tdy*tdy) || 1;
-            p.vx += tdx/td * 400 * dt; p.vy += tdy/td * 400 * dt;
-            const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy);
-            if (spd > 200) { p.vx = p.vx/spd*200; p.vy = p.vy/spd*200; }
+            // Check if target is still alive
+            if (p.target.hp <= 0 || !enemies.includes(p.target)) {
+                // Retarget to nearest enemy
+                let nd = Infinity; p.target = null;
+                for (const e of enemies) {
+                    const d2 = (e.x-p.x)**2+(e.y-p.y)**2;
+                    if (d2 < nd) { nd = d2; p.target = e; }
+                }
+            }
+            if (p.target) {
+                const tdx = p.target.x - p.x, tdy = p.target.y - p.y;
+                const td = Math.sqrt(tdx*tdx+tdy*tdy) || 1;
+                p.vx += tdx/td * 400 * dt; p.vy += tdy/td * 400 * dt;
+                const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+                if (spd > 200) { p.vx = p.vx/spd*200; p.vy = p.vy/spd*200; }
+            }
         }
         if (p.homing && p.enemy) {
             const tdx2 = player.x - p.x, tdy2 = player.y - p.y;
@@ -1492,6 +1536,11 @@ function handleTap(cx, cy) {
         if (cx >= 80 && cx <= 200 && cy >= 500 && cy <= 540) { initGame(); return; }
         if (cx >= 220 && cx <= 340 && cy >= 500 && cy <= 540) { state = 'title'; return; }
     }
+
+    if (state === 'victory') {
+        if (cx >= 80 && cx <= 200 && cy >= 530 && cy <= 570) { initGame(); return; }
+        if (cx >= 220 && cx <= 340 && cy >= 530 && cy <= 570) { state = 'title'; return; }
+    }
 }
 
 // Mouse click
@@ -1536,12 +1585,16 @@ function update(dt) {
         }
     }
 
-    // Burn ticks on enemies
+    // Burn & slow ticks on enemies
     for (const e of enemies) {
         if (e.burnTimer && e.burnTimer > 0) {
             e.burnTimer -= dt;
             e.hp -= (e.burnDmg || 1) * dt;
             if (Math.random() < 0.1) spawnParticles(e.x, e.y, '#FF4400', 1, 15);
+        }
+        if (e.slowed && e.slowed > 0) {
+            e.slowed -= dt;
+            if (e.slowed <= 0) { e.spd = e.origSpd || e.spd * 2; e.slowed = 0; }
         }
     }
 
@@ -2005,6 +2058,66 @@ function drawGameOver() {
 
 
 // ============================================
+// VICTORY SCREEN
+// ============================================
+function drawVictory() {
+    // Animated background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1a0a05'); bg.addColorStop(0.4, '#2a1505'); bg.addColorStop(1, '#0a0505');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    // Golden particles
+    for (let i = 0; i < 15; i++) {
+        const gx = (t * 15 + i * 30) % (W + 20) - 10;
+        const gy = (t * 10 * (1 + (i%3)*0.5) + i * 50) % (H + 20) - 10;
+        ctx.globalAlpha = 0.3 + Math.sin(t * 2 + i) * 0.2;
+        circ(gx, gy, 3 + Math.sin(t + i) * 2, '#FFD700');
+    }
+    ctx.globalAlpha = 1;
+
+    // Title
+    const pulse = Math.sin(t * 2) * 0.1 + 1;
+    ctx.save(); ctx.translate(W/2, 130); ctx.scale(pulse, pulse);
+    txt('🎉 승리! 🎉', 0, -10, '#FFD700', 28);
+    ctx.restore();
+
+    txt('구미호왕을 물리쳤다!', W/2, 175, '#FFAA44', 13);
+
+    // Stats
+    const mins = Math.floor(gameTime/60), secs = Math.floor(gameTime%60);
+    txt('생존 시간', W/2, 240, '#AAA', 10);
+    txt(`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`, W/2, 260, '#FFD700', 22);
+
+    txt('총 처치', W/2, 310, '#AAA', 10);
+    txt(`${kills}`, W/2, 330, '#FF8888', 22);
+
+    txt('최종 레벨', W/2, 380, '#AAA', 10);
+    txt(`Lv.${player.level}`, W/2, 400, '#88FF88', 22);
+
+    // Character used
+    txt(`사용 캐릭터: ${CHARS[player.charIdx].name}`, W/2, 445, '#AAA', 9);
+
+    // Best record
+    txt(`최고 기록: ${Math.floor(saveData.bestTime/60)}분 ${Math.floor(saveData.bestTime%60)}초`, W/2, 470, '#666', 8);
+    txt(`클리어 횟수: ${saveData.totalClears}`, W/2, 485, '#666', 8);
+
+    // Buttons
+    px(80, 530, 120, 40, '#DD8800');
+    txt('다시하기', 140, 538, '#FFF', 12);
+    px(220, 530, 120, 40, '#444');
+    txt('메뉴', 280, 538, '#FFF', 12);
+
+    // Screen flash
+    if (screenFlash > 0) {
+        ctx.globalAlpha = screenFlash;
+        ctx.fillStyle = screenFlashColor;
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+        screenFlash = Math.max(0, screenFlash - 0.02);
+    }
+}
+
+// ============================================
 // MAIN GAME LOOP
 // ============================================
 function gameLoop(now) {
@@ -2031,6 +2144,9 @@ function gameLoop(now) {
             break;
         case 'gameOver':
             drawGameOver();
+            break;
+        case 'victory':
+            drawVictory();
             break;
     }
 }

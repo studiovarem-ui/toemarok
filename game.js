@@ -32,7 +32,7 @@ function txt(text,x,y,c,s,a) { ctx.fillStyle=c||'#fff'; ctx.font=`bold ${s||10}p
 // ============================================
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
-function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); startBGM(); }
 function playSound(type) {
     ensureAudio(); if (!audioCtx) return;
     const now = audioCtx.currentTime;
@@ -72,6 +72,37 @@ function playSound(type) {
     }
 }
 
+
+// ============================================
+// BGM SYSTEM
+// ============================================
+const bgmTracks = ['bgm1.mp3', 'bgm2.mp3'];
+let bgmAudio = null;
+let bgmIndex = 0;
+let bgmStarted = false;
+
+function startBGM() {
+    if (bgmStarted) return;
+    bgmStarted = true;
+    playBGM();
+}
+
+function playBGM() {
+    if (bgmAudio) { bgmAudio.pause(); bgmAudio = null; }
+    bgmAudio = new Audio(bgmTracks[bgmIndex]);
+    bgmAudio.volume = 0.4;
+    bgmAudio.play().catch(() => {});
+    bgmAudio.addEventListener('ended', () => {
+        bgmIndex = (bgmIndex + 1) % bgmTracks.length;
+        playBGM();
+    });
+}
+
+function stopBGM() {
+    if (bgmAudio) { bgmAudio.pause(); bgmAudio = null; }
+    bgmStarted = false;
+}
+
 // ============================================
 // SAVE SYSTEM
 // ============================================
@@ -95,10 +126,10 @@ let bossWave = 0; // 보스 웨이브 카운터
 const CHARS = [
     { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:150, spd:130, atk:1.2, range:50 },
     { name:'무녀', desc:'원거리', weapon:1, color:'#DD3333', draw:null, unlocked:()=>true, hp:120, spd:120, atk:1.3, range:60 },
-    { name:'도깨비', desc:'근접', weapon:2, color:'#33AACC', draw:null, unlocked:()=>saveData.totalClears>=1, hp:180, spd:110, atk:1.5, range:40 },
-    { name:'구미호', desc:'속도', weapon:3, color:'#EE5577', draw:null, unlocked:()=>saveData.totalClears>=3, hp:100, spd:170, atk:1.1, range:45 },
+    { name:'전우치', desc:'도술사', weapon:4, color:'#6644AA', draw:null, unlocked:()=>saveData.totalClears>=1, hp:130, spd:125, atk:1.4, range:55 },
+    { name:'홍길동', desc:'의적', weapon:7, color:'#33AA55', draw:null, unlocked:()=>saveData.totalClears>=3, hp:140, spd:150, atk:1.3, range:45 },
     { name:'장군', desc:'탱커', weapon:5, color:'#8B6914', draw:null, unlocked:()=>saveData.totalClears>=5, hp:220, spd:100, atk:1.2, range:35 },
-    { name:'산신령', desc:'소환', weapon:4, color:'#228844', draw:null, unlocked:()=>saveData.bestTime>=900, hp:130, spd:110, atk:1.4, range:70 },
+    { name:'산신령', desc:'소환', weapon:2, color:'#228844', draw:null, unlocked:()=>saveData.bestTime>=900, hp:130, spd:110, atk:1.4, range:70 },
 ];
 
 // ============================================
@@ -292,92 +323,100 @@ function drawMunyeo(x, y, frame) {
     ctx.restore();
 }
 
-function drawDokkaebi(x, y, frame) {
+function drawJeonwoochi(x, y, frame) {
     const f = Math.floor(frame) % 4;
-    const bob = Math.sin(f * Math.PI / 2) * 2;
+    const bob = Math.sin(f * Math.PI / 2) * 1.5;
     ctx.save(); ctx.translate(x, y + bob);
     ctx.globalAlpha = 0.2; circ(0, 18, 10, '#000'); ctx.globalAlpha = 1;
-    px(-9, -2, 18, 16, '#2288AA');
-    px(-8, -1, 16, 14, '#33AACC');
-    px(-8, 8, 16, 6, '#CC8833');
-    px(-6, 9, 3, 4, '#8B4513');
-    px(-1, 10, 3, 3, '#8B4513');
-    px(4, 9, 3, 4, '#8B4513');
-    px(-6, 14+bob*0.3, 5, 5, '#2288AA');
-    px(1, 14-bob*0.3, 5, 5, '#2288AA');
-    px(-6, 18, 6, 3, '#1a1a1a');
-    px(1, 18, 6, 3, '#1a1a1a');
-    circ(0, -10, 10, '#2288AA');
-    circ(0, -10, 9, '#33BBDD');
-    px(-2, -22, 4, 5, '#FFD700');
-    px(-1, -26, 2, 5, '#FFEC8B');
-    px(0, -28, 1, 3, '#FFF8DC');
-    px(-8, -18, 3, 6, '#AA3333');
-    px(5, -18, 3, 6, '#AA3333');
-    px(-5, -20, 2, 4, '#CC4444');
-    px(3, -20, 2, 4, '#CC4444');
-    px(-5, -12, 4, 3, '#FFFFFF');
-    px(2, -12, 4, 3, '#FFFFFF');
-    px(-4, -11, 2, 2, '#FF0000');
-    px(3, -11, 2, 2, '#FF0000');
-    px(-4, -7, 8, 3, '#1a1a1a');
-    px(-3, -6, 2, 2, '#FFFFFF');
-    px(2, -6, 2, 2, '#FFFFFF');
-    px(-13, -1, 5, 10, '#33AACC');
-    px(8, -1, 5, 10, '#33AACC');
-    px(11, -6, 5, 16, '#8B4513');
-    px(10, -8, 7, 4, '#A0522D');
-    px(10, -8, 7, 2, '#CD853F');
-    circ(11, -8, 2, '#888');
-    circ(15, -7, 2, '#888');
-    circ(13, -10, 2, '#888');
+    // 도포 (보라색 도사 의복)
+    px(-9, -2, 18, 16, '#5533AA');
+    px(-8, -1, 16, 14, '#6644BB');
+    px(-8, 8, 16, 6, '#4422AA');
+    // 허리띠
+    px(-7, 5, 14, 2, '#FFD700');
+    // 다리
+    const legOff = Math.sin(f * Math.PI / 2) * 2;
+    px(-5, 12+legOff, 4, 6, '#5533AA');
+    px(1, 12-legOff, 4, 6, '#5533AA');
+    px(-6, 17+legOff, 5, 3, '#2a2a2a');
+    px(1, 17-legOff, 5, 3, '#2a2a2a');
+    // 얼굴
+    circ(0, -10, 9, '#FFD5B0');
+    circ(0, -10, 8, '#FFE0C0');
+    px(-3, -11, 2, 2, '#1a1a1a');
+    px(2, -11, 2, 2, '#1a1a1a');
+    px(-1, -8, 2, 1, '#CC8866');
+    // 갓 (검은 갓 + 보라 끈)
+    px(-10, -20, 20, 3, '#1a1a1a');
+    px(-6, -24, 12, 5, '#2a2a2a');
+    px(-5, -23, 10, 4, '#333333');
+    px(-4, -20, 8, 1, '#6644BB');
+    // 팔 + 부채
+    const armSwing = Math.sin(f * Math.PI / 2) * 3;
+    px(-11, 0+armSwing, 4, 8, '#6644BB');
+    px(7, 0-armSwing, 4, 8, '#6644BB');
+    // 오른손에 도술 부채
+    if (armSwing > 0) {
+        px(9, 2-armSwing, 8, 6, '#DDDDFF');
+        px(10, 3-armSwing, 6, 4, '#BBBBEE');
+        px(11, 4-armSwing, 1, 2, '#6644BB');
+        px(13, 4-armSwing, 1, 2, '#6644BB');
+    }
+    // 도술 오라
+    ctx.globalAlpha = 0.2 + Math.sin(t * 3) * 0.1;
+    circ(0, 0, 18, '#8866FF');
+    ctx.globalAlpha = 1;
     ctx.restore();
 }
 
-function drawGumiho(x, y, frame) {
+function drawHonggildong(x, y, frame) {
     const f = Math.floor(frame) % 4;
-    const bob = Math.sin(f * Math.PI / 2) * 1;
+    const bob = Math.sin(f * Math.PI / 2) * 1.5;
     ctx.save(); ctx.translate(x, y + bob);
     ctx.globalAlpha = 0.2; circ(0, 18, 10, '#000'); ctx.globalAlpha = 1;
-    for (let i = 0; i < 5; i++) {
-        const angle = (i - 2) * 0.4 + Math.sin(t * 2 + i * 0.5) * 0.15;
-        const tx2 = Math.sin(angle) * (12 + i * 2);
-        const ty2 = 5 + Math.cos(angle) * 3;
-        ctx.globalAlpha = 0.9;
-        for (let j = 0; j < 4; j++) {
-            const jx = tx2 * (1 + j * 0.3);
-            const jy = ty2 - j * 5;
-            px(jx - 2, jy, 4, 4, j < 3 ? '#FF8844' : '#FFFFFF');
-        }
-    }
-    ctx.globalAlpha = 1;
-    px(-8, -2, 16, 15, '#DD4466');
-    px(-7, -1, 14, 13, '#EE5577');
-    px(-7, 8, 14, 5, '#CC3355');
-    px(-7, -2, 14, 1, '#FFD700');
-    px(-7, 7, 14, 1, '#FFD700');
+    // 녹색 의적 의복
+    px(-8, -2, 16, 15, '#228844');
+    px(-7, -1, 14, 13, '#33AA55');
+    px(-7, 8, 14, 5, '#1a7733');
+    // 허리띠 + 매듭
+    px(-7, 5, 14, 2, '#8B4513');
+    px(-2, 5, 4, 3, '#A0522D');
+    // 다리
+    const legOff = Math.sin(f * Math.PI / 2) * 2;
+    px(-5, 12+legOff, 4, 6, '#228844');
+    px(1, 12-legOff, 4, 6, '#228844');
+    px(-6, 17+legOff, 5, 3, '#1a1a1a');
+    px(1, 17-legOff, 5, 3, '#1a1a1a');
+    // 얼굴
     circ(0, -10, 9, '#FFD5B0');
     circ(0, -10, 8, '#FFE0C0');
-    px(-8, -22, 5, 7, '#FF8844');
-    px(-7, -21, 3, 5, '#FFBB88');
-    px(3, -22, 5, 7, '#FF8844');
-    px(4, -21, 3, 5, '#FFBB88');
-    px(-4, -12, 3, 2, '#FFD700');
-    px(2, -12, 3, 2, '#FFD700');
-    px(-3, -12, 1, 2, '#1a1a1a');
-    px(3, -12, 1, 2, '#1a1a1a');
-    px(-2, -7, 1, 1, '#CC6644');
-    px(1, -7, 1, 1, '#CC6644');
-    px(-1, -6, 2, 1, '#CC6644');
-    px(-9, -18, 18, 8, '#1a1a1a');
-    px(-10, -15, 2, 18, '#1a1a1a');
-    px(8, -15, 2, 18, '#1a1a1a');
-    px(-11, 0, 4, 7, '#EE5577');
-    px(7, 0, 4, 7, '#EE5577');
-    const flicker = Math.sin(t * 6) * 2;
-    circ(-12, 5, 4+flicker*0.3, 'rgba(255,100,0,0.6)');
-    circ(-12, 5, 2.5, '#FFAA44');
-    circ(-12, 4, 1.5, '#FFEE88');
+    px(-3, -11, 2, 2, '#1a1a1a');
+    px(2, -11, 2, 2, '#1a1a1a');
+    px(-1, -8, 2, 1, '#CC8866');
+    // 웃는 표정
+    px(-2, -6, 1, 1, '#CC8866');
+    px(1, -6, 1, 1, '#CC8866');
+    // 두건 (녹색 머리띠)
+    px(-9, -18, 18, 5, '#1a6633');
+    px(-8, -17, 16, 3, '#228844');
+    // 두건 뒤 리본
+    px(7, -17, 3, 8, '#1a6633');
+    px(8, -16, 2, 6, '#228844');
+    // 팔
+    const armSwing = Math.sin(f * Math.PI / 2) * 3;
+    px(-11, 0+armSwing, 4, 8, '#33AA55');
+    px(7, 0-armSwing, 4, 8, '#33AA55');
+    // 오른손에 칼
+    px(10, -2-armSwing, 2, 14, '#AAAAAA');
+    px(11, -1-armSwing, 1, 12, '#CCCCCC');
+    px(9, 10-armSwing, 4, 3, '#8B4513');
+    // 바람 이펙트 (빠른 캐릭터)
+    ctx.globalAlpha = 0.15;
+    for (let i = 0; i < 3; i++) {
+        const wx = -8 - i * 5 - Math.sin(t * 4 + i) * 3;
+        px(wx, -5 + i * 4, 4, 1, '#88FFAA');
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
 }
 
@@ -617,6 +656,41 @@ function drawGumihoKing(x, y, frame) {
     px(-13, -2, 2, 18, '#1a1a1a'); px(11, -2, 2, 18, '#1a1a1a');
     ctx.restore();
 }
+function drawDokkaebiKing(x, y, frame) {
+    const breath = Math.sin(t * 1.8) * 2;
+    ctx.save(); ctx.translate(x, y);
+    // 오라
+    ctx.globalAlpha = 0.12;
+    circ(0, 0, 38 + breath, '#33AACC'); circ(0, 0, 30 + breath, '#2288AA');
+    ctx.globalAlpha = 1;
+    // 몸통 (거대한 파란 도깨비)
+    px(-18, -8, 36, 30, '#1a6688'); px(-17, -7, 34, 28, '#2288AA'); px(-16, -6, 32, 26, '#33AACC');
+    // 어깨
+    px(-22, -6, 8, 10, '#2288AA'); px(14, -6, 8, 10, '#2288AA');
+    // 머리
+    circ(0, -18, 15, '#2288AA'); circ(0, -18, 13, '#33BBDD');
+    // 뿔 3개 (금색, 더 큼)
+    px(-6, -34, 4, 8, '#FFD700'); px(-5, -38, 2, 5, '#FFEC8B');
+    px(-1, -36, 3, 10, '#FFD700'); px(0, -42, 2, 7, '#FFEC8B');
+    px(3, -34, 4, 8, '#FFD700'); px(4, -38, 2, 5, '#FFEC8B');
+    // 눈 (빨간, 빛남)
+    const eyeGlow = Math.sin(t * 3) * 0.3 + 0.7;
+    ctx.globalAlpha = eyeGlow;
+    px(-7, -21, 5, 4, '#FF0000'); px(3, -21, 5, 4, '#FF0000');
+    ctx.globalAlpha = 1;
+    px(-6, -20, 3, 2, '#FFDD00'); px(4, -20, 3, 2, '#FFDD00');
+    // 입 (크게 벌린)
+    px(-6, -13, 12, 4, '#0a3344');
+    px(-5, -12, 2, 3, '#FFF'); px(-1, -12, 2, 3, '#FFF'); px(3, -12, 2, 3, '#FFF');
+    // 거대한 방망이
+    px(-26, -30, 6, 44, '#6a3a1a'); px(-27, -28, 8, 6, '#8B4513');
+    px(-28, -34, 10, 8, '#555'); px(-29, -36, 12, 4, '#888');
+    circ(-25, -36, 4, '#AAA'); circ(-21, -36, 4, '#AAA'); circ(-23, -39, 4, '#AAA');
+    // 다리
+    px(-8, 18, 7, 6, '#2288AA'); px(1, 18, 7, 6, '#2288AA');
+    px(-8, 22, 8, 4, '#1a1a1a'); px(1, 22, 8, 4, '#1a1a1a');
+    ctx.restore();
+}
 
 // ============================================
 // WEAPON & ITEM DRAWING
@@ -668,7 +742,7 @@ function drawExpOrb(x, y) {
     circ(x, y, 4, '#00CC66'); circ(x, y, 3, '#00FF88'); circ(x, y-1, 1.5, '#AAFFCC');
 }
 
-const charDrawFns = [drawExorcist, drawMunyeo, drawDokkaebi, drawGumiho, drawJanggun, drawSanshin];
+const charDrawFns = [drawExorcist, drawMunyeo, drawJeonwoochi, drawHonggildong, drawJanggun, drawSanshin];
 const enemyDrawFns = [drawJapgwi, drawDokkaebul, drawMulgwisin, drawYacha, drawGangsi, drawWongwi, drawSamdugu, drawImuga];
 
 
@@ -783,6 +857,7 @@ function initGame() {
     bossSpawned1 = false; bossSpawned2 = false;
     nextBossTime = 180; bossWave = 0;
     bombCooldown = 0; lastTime = performance.now();
+    startBGM();
     state = 'playing';
 }
 
@@ -841,19 +916,24 @@ function spawnEnemy(typeIdx, px2, py2) {
 
 function spawnBoss(type, wave) {
     const w = wave || 0;
-    const hpMul = 1 + w * 0.3; // 웨이브마다 30% 강해짐
+    const hpMul = 1 + w * 0.3;
     const angle = Math.random() * Math.PI * 2;
     const dist = 350;
     const bx = player.x + Math.cos(angle) * dist;
     const by = player.y + Math.sin(angle) * dist;
-    const baseHp = type === 1 ? 240 : 600; // 120% of 200/500
+    let hp, spd, dmg, radius, exp, pattern, btype;
+    if (type === 1) { // 귀왕
+        hp = 240; spd = 38; dmg = 14; radius = 30; exp = 100; pattern = 'boss1'; btype = 98;
+    } else if (type === 2) { // 구미호왕
+        hp = 600; spd = 33; dmg = 18; radius = 35; exp = 300; pattern = 'boss2'; btype = 99;
+    } else { // 도깨비왕
+        hp = 400; spd = 36; dmg = 16; radius = 32; exp = 200; pattern = 'boss3'; btype = 97;
+    }
     const boss = {
         uid: ++enemyIdCounter,
-        x: bx, y: by, type: type === 1 ? 98 : 99,
-        hp: baseHp * hpMul, maxHp: baseHp * hpMul,
-        spd: type === 1 ? 38 : 33, dmg: type === 1 ? 14 : 18,
-        radius: type === 1 ? 30 : 35, exp: type === 1 ? 100 : 300,
-        pattern: type === 1 ? 'boss1' : 'boss2',
+        x: bx, y: by, type: btype,
+        hp: hp * hpMul, maxHp: hp * hpMul,
+        spd, dmg, radius, exp, pattern,
         timer: 0, phase: 0, angle: 0, isBoss: true, shootCd: 0,
         startX: bx, startY: by
     };
@@ -909,12 +989,13 @@ function updateSpawning(dt) {
         });
         while (enemies.length > 200) enemies.pop();
     }
-    // Boss spawns every 3 minutes, alternating types, getting stronger
+    // Boss spawns every 3 minutes, cycling 3 types, getting stronger
     if (gameTime >= nextBossTime) {
         bossWave++;
-        const bossType = bossWave % 2 === 1 ? 1 : 2; // 홀수=귀왕, 짝수=구미호왕
+        const bossTypes = [1, 3, 2]; // 귀왕 → 도깨비왕 → 구미호왕
+        const bossType = bossTypes[(bossWave - 1) % 3];
         spawnBoss(bossType, bossWave);
-        nextBossTime += 180; // 다음 보스 3분 후
+        nextBossTime += 180;
     }
 }
 
@@ -1018,6 +1099,29 @@ function updateEnemies(dt) {
                     if (e.timer > 4) { e.phase = 0; e.timer = 0; }
                 }
                 break;
+            case 'boss3': // 도깨비왕
+                e.shootCd -= dt;
+                if (e.phase === 0) { // 땅 찍기 접근
+                    e.x += nx * e.spd * dt; e.y += ny * e.spd * dt;
+                    if (dist < 80 || e.timer > 3) { e.phase = 1; e.timer = 0; }
+                } else if (e.phase === 1) { // 방망이 내려찍기 - 충격파
+                    if (e.timer < 0.1) {
+                        spawnParticles(e.x, e.y, '#33AACC', 20, 100);
+                        screenFlash = 0.2; screenFlashColor = '#33AACC';
+                        // 충격파 대미지
+                        if (dist < 120) { damagePlayer(e.dmg); }
+                        // 돌 투사체 4방향
+                        for (let s = 0; s < 4; s++) {
+                            const sa = s * Math.PI / 2;
+                            projectiles.push({ x: e.x, y: e.y, vx: Math.cos(sa)*100, vy: Math.sin(sa)*100, dmg: e.dmg * 0.6, life: 2, radius: 8, enemy: true, color: '#8B4513' });
+                        }
+                    }
+                    if (e.timer > 1.5) { e.phase = 2; e.timer = 0; }
+                } else { // 돌진
+                    e.x += nx * e.spd * 2.5 * dt; e.y += ny * e.spd * 2.5 * dt;
+                    if (e.timer > 2) { e.phase = 0; e.timer = 0; }
+                }
+                break;
         }
 
         // Clamp to map
@@ -1088,6 +1192,7 @@ function killEnemy(idx) {
 
 function enemyColor(type) {
     const colors = ['#7744BB','#4488FF','#336655','#DD3344','#337788','#CCCCDD','#7a3a3a','#3a8a3a'];
+    if (type === 97) return '#33AACC';
     if (type === 98) return '#FF4400';
     if (type === 99) return '#FF4488';
     return colors[type] || '#888';
@@ -1830,6 +1935,7 @@ function drawGame() {
         }
         if (e.isBoss) {
             if (e.type === 98) drawGwiwang(sx, sy, t*3);
+            else if (e.type === 97) drawDokkaebiKing(sx, sy, t*3);
             else drawGumihoKing(sx, sy, t*3);
             // Boss HP bar - big
             const bhw = 80, bhh = 6;

@@ -2115,6 +2115,16 @@ function drawLevelUp() {
         px(cx2, cy2, cardW, cardH, c.evo ? '#442266' : '#333');
         px(cx2+2, cy2+2, cardW-4, cardH-4, c.evo ? '#553377' : '#3a3a3a');
 
+        // 테두리
+        let borderCol = '#666';
+        if (c.type === 'weapon') borderCol = WEAPONS[c.id].color;
+        if (c.type === 'passive') borderCol = '#88FF88';
+        if (c.type === 'evolution') borderCol = '#FFD700';
+        if (c.type === 'heal') borderCol = '#FF6666';
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx2, cy2, cardW, cardH);
+
         // Color
         let col = '#FFF';
         if (c.type === 'weapon') col = WEAPONS[c.id].color;

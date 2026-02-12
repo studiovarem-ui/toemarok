@@ -749,31 +749,46 @@ const enemyDrawFns = [drawJapgwi, drawDokkaebul, drawMulgwisin, drawYacha, drawG
 // ============================================
 // MAP DRAWING
 // ============================================
+// Background image (1024x1024, tiled 2x2 = 2048x2048 map area)
+const bgImg = new Image();
+bgImg.src = 'bg.jpg';
+let bgLoaded = false;
+bgImg.onload = () => { bgLoaded = true; };
+const BG_SIZE = 1024; // image size
+const MAP_TILES = 2;  // 2x2 tiling
+const MAP_PX = BG_SIZE * MAP_TILES; // 2048 total
+
 function drawMap(camX, camY) {
-    const tileW = 40, tileH = 40;
-    const startX = Math.floor((camX - W/2) / tileW) - 1;
-    const startY = Math.floor((camY - H/2) / tileH) - 1;
-    const endX = startX + Math.ceil(W / tileW) + 3;
-    const endY = startY + Math.ceil(H / tileH) + 3;
-    for (let ty = startY; ty <= endY; ty++) {
-        for (let tx = startX; tx <= endX; tx++) {
-            const sx = tx * tileW - camX + W/2;
-            const sy = ty * tileH - camY + H/2;
-            const hash = ((tx * 7 + ty * 13) & 0xFF);
-            const r = 140 + (hash & 15); const g = 115 + (hash & 15); const b = 85 + (hash & 7);
-            px(sx, sy, tileW, tileH, `rgb(${r},${g},${b})`);
-            if (hash % 17 === 0) { px(sx+10, sy+15, 3, 2, `rgb(${r-15},${g-15},${b-10})`); }
-            if (hash % 23 === 0) { circ(sx+25, sy+20, 2, '#5a7a3a'); }
+    if (bgLoaded) {
+        // Draw 2x2 tiled background centered on (0,0)
+        // Map spans from -1024 to +1024
+        const offsetX = -MAP_PX / 2; // -1024
+        const offsetY = -MAP_PX / 2;
+        for (let ty = 0; ty < MAP_TILES; ty++) {
+            for (let tx = 0; tx < MAP_TILES; tx++) {
+                const worldX = offsetX + tx * BG_SIZE;
+                const worldY = offsetY + ty * BG_SIZE;
+                const sx = worldX - camX + W / 2;
+                const sy = worldY - camY + H / 2;
+                // Only draw if visible on screen
+                if (sx + BG_SIZE > 0 && sx < W && sy + BG_SIZE > 0 && sy < H) {
+                    ctx.drawImage(bgImg, sx, sy, BG_SIZE, BG_SIZE);
+                }
+            }
         }
+    } else {
+        // Fallback: simple color fill while loading
+        ctx.fillStyle = '#3a5a2a';
+        ctx.fillRect(0, 0, W, H);
     }
     // Map boundary markers
-    const mapR = 1200;
-    const edgeDist = Math.sqrt(camX*camX + camY*camY);
+    const mapR = 1000;
+    const edgeDist = Math.sqrt(camX * camX + camY * camY);
     if (edgeDist > mapR - 250) {
         ctx.strokeStyle = 'rgba(255,0,0,0.3)';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(W/2 - camX, H/2 - camY, mapR, 0, Math.PI*2);
+        ctx.arc(W / 2 - camX, H / 2 - camY, mapR, 0, Math.PI * 2);
         ctx.stroke();
     }
 }
@@ -1125,7 +1140,7 @@ function updateEnemies(dt) {
         }
 
         // Clamp to map
-        const mapR = 1200;
+        const mapR = 1000;
         const eDist = Math.sqrt(e.x*e.x + e.y*e.y);
         if (eDist > mapR) { e.x *= mapR/eDist; e.y *= mapR/eDist; }
 
@@ -1733,7 +1748,7 @@ function update(dt) {
     }
 
     // Map boundary
-    const mapR = 1200;
+    const mapR = 1000;
     const pDist = Math.sqrt(player.x*player.x+player.y*player.y);
     if (pDist > mapR) { player.x *= mapR/pDist; player.y *= mapR/pDist; }
 

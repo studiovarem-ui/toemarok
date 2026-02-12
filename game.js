@@ -90,26 +90,26 @@ let gameTime, kills, spawnTimer, bossSpawned1, bossSpawned2;
 let bombCooldown, lastTime, screenFlash = 0, screenFlashColor = '#FFF';
 
 const CHARS = [
-    { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:100, spd:120, atk:1.0, range:40 },
-    { name:'무녀', desc:'원거리', weapon:1, color:'#DD3333', draw:null, unlocked:()=>true, hp:80, spd:110, atk:1.1, range:50 },
-    { name:'도깨비', desc:'근접', weapon:2, color:'#33AACC', draw:null, unlocked:()=>saveData.totalClears>=1, hp:120, spd:100, atk:1.3, range:30 },
-    { name:'구미호', desc:'속도', weapon:3, color:'#EE5577', draw:null, unlocked:()=>saveData.totalClears>=3, hp:70, spd:160, atk:0.9, range:35 },
-    { name:'장군', desc:'탱커', weapon:5, color:'#8B6914', draw:null, unlocked:()=>saveData.totalClears>=5, hp:150, spd:90, atk:1.0, range:30 },
-    { name:'산신령', desc:'소환', weapon:4, color:'#228844', draw:null, unlocked:()=>saveData.bestTime>=900, hp:90, spd:100, atk:1.2, range:60 },
+    { name:'퇴마사', desc:'균형형', weapon:0, color:'#4466BB', draw:null, unlocked:()=>true, hp:150, spd:130, atk:1.2, range:50 },
+    { name:'무녀', desc:'원거리', weapon:1, color:'#DD3333', draw:null, unlocked:()=>true, hp:120, spd:120, atk:1.3, range:60 },
+    { name:'도깨비', desc:'근접', weapon:2, color:'#33AACC', draw:null, unlocked:()=>saveData.totalClears>=1, hp:180, spd:110, atk:1.5, range:40 },
+    { name:'구미호', desc:'속도', weapon:3, color:'#EE5577', draw:null, unlocked:()=>saveData.totalClears>=3, hp:100, spd:170, atk:1.1, range:45 },
+    { name:'장군', desc:'탱커', weapon:5, color:'#8B6914', draw:null, unlocked:()=>saveData.totalClears>=5, hp:220, spd:100, atk:1.2, range:35 },
+    { name:'산신령', desc:'소환', weapon:4, color:'#228844', draw:null, unlocked:()=>saveData.bestTime>=900, hp:130, spd:110, atk:1.4, range:70 },
 ];
 
 // ============================================
 // WEAPON & PASSIVE DEFINITIONS
 // ============================================
 const WEAPONS = [
-    { name:'부적', desc:'전방 투사체', type:'projectile', baseCd:0.8, color:'#FF4444' },
-    { name:'신령 방울', desc:'유도 공격', type:'homing', baseCd:1.2, color:'#FFD700' },
-    { name:'도깨비 방망이', desc:'회전 공격', type:'spin', baseCd:1.5, color:'#8B4513' },
-    { name:'여우불', desc:'불꽃 장판', type:'zone', baseCd:2.0, color:'#FF6600' },
-    { name:'천둥', desc:'낙뢰', type:'thunder', baseCd:1.8, color:'#FFDD00' },
-    { name:'신궁', desc:'관통 화살', type:'pierce', baseCd:1.0, color:'#88CCFF' },
-    { name:'용의 숨결', desc:'전방 화염', type:'breath', baseCd:2.5, color:'#FF4400' },
-    { name:'귀살검', desc:'근접 베기', type:'slash', baseCd:0.6, color:'#AAAAFF' },
+    { name:'부적', desc:'전방 투사체', type:'projectile', baseCd:0.5, color:'#FF4444' },
+    { name:'신령 방울', desc:'유도 공격', type:'homing', baseCd:0.8, color:'#FFD700' },
+    { name:'도깨비 방망이', desc:'회전 공격', type:'spin', baseCd:1.0, color:'#8B4513' },
+    { name:'여우불', desc:'불꽃 장판', type:'zone', baseCd:1.5, color:'#FF6600' },
+    { name:'천둥', desc:'낙뢰', type:'thunder', baseCd:1.2, color:'#FFDD00' },
+    { name:'신궁', desc:'관통 화살', type:'pierce', baseCd:0.6, color:'#88CCFF' },
+    { name:'용의 숨결', desc:'전방 화염', type:'breath', baseCd:1.8, color:'#FF4400' },
+    { name:'귀살검', desc:'근접 베기', type:'slash', baseCd:0.4, color:'#AAAAFF' },
 ];
 
 const PASSIVES = [
@@ -159,7 +159,22 @@ touchArea.addEventListener('touchstart', e => {
         handleTap(pos.x, pos.y);
         return;
     }
-    // Playing state: joystick drag
+    // Playing state: check bomb button (bottom-right circle)
+    const bombBtnX = W - 50, bombBtnY = H - 90, bombBtnR = 30;
+    if (state === 'playing' && Math.sqrt((pos.x-bombBtnX)**2+(pos.y-bombBtnY)**2) < bombBtnR) {
+        if (bombCooldown <= 0) {
+            bombCooldown = 30;
+            playSound('bomb');
+            screenFlash = 0.5; screenFlashColor = '#FFD700';
+            spawnParticles(player.x, player.y, '#FFD700', 30, 120);
+            for (const e3 of enemies) {
+                if (!e3.isBoss) { e3.hp -= 50; spawnDmgNum(e3.x, e3.y-10, 50, '#FFD700'); }
+                else { e3.hp -= 25; spawnDmgNum(e3.x, e3.y-10, 25, '#FFD700'); }
+            }
+        }
+        return;
+    }
+    // Joystick drag
     touchActive = true;
     touchStartX = pos.x;
     touchStartY = pos.y;
@@ -786,14 +801,14 @@ function computePlayerStats() {
 // ENEMY SPAWNING
 // ============================================
 const ENEMY_DEFS = [
-    { name:'잡귀', hp:3, spd:90, dmg:5, radius:10, exp:3, pattern:'straight', minTime:0 },
-    { name:'도깨불', hp:5, spd:70, dmg:8, radius:8, exp:5, pattern:'zigzag', minTime:30 },
-    { name:'물귀신', hp:8, spd:55, dmg:7, radius:10, exp:6, pattern:'aimed', minTime:90 },
-    { name:'야차', hp:6, spd:140, dmg:10, radius:9, exp:8, pattern:'swooper', minTime:150 },
-    { name:'강시', hp:20, spd:40, dmg:12, radius:12, exp:10, pattern:'tank', minTime:210 },
-    { name:'원귀', hp:8, spd:25, dmg:6, radius:10, exp:8, pattern:'sniper', minTime:270 },
-    { name:'삼두구', hp:4, spd:80, dmg:6, radius:10, exp:5, pattern:'formation', minTime:330 },
-    { name:'이무기', hp:15, spd:65, dmg:10, radius:12, exp:12, pattern:'spiral', minTime:400 },
+    { name:'잡귀', hp:3, spd:75, dmg:3, radius:10, exp:3, pattern:'straight', minTime:0 },
+    { name:'도깨불', hp:5, spd:60, dmg:5, radius:8, exp:5, pattern:'zigzag', minTime:30 },
+    { name:'물귀신', hp:8, spd:45, dmg:5, radius:10, exp:6, pattern:'aimed', minTime:90 },
+    { name:'야차', hp:6, spd:120, dmg:7, radius:9, exp:8, pattern:'swooper', minTime:150 },
+    { name:'강시', hp:20, spd:35, dmg:8, radius:12, exp:10, pattern:'tank', minTime:210 },
+    { name:'원귀', hp:8, spd:20, dmg:5, radius:10, exp:8, pattern:'sniper', minTime:270 },
+    { name:'삼두구', hp:4, spd:65, dmg:4, radius:10, exp:5, pattern:'formation', minTime:330 },
+    { name:'이무기', hp:15, spd:55, dmg:7, radius:12, exp:12, pattern:'spiral', minTime:400 },
 ];
 
 function spawnEnemy(typeIdx, px2, py2) {
@@ -834,8 +849,8 @@ function spawnBoss(type) {
 }
 
 function updateSpawning(dt) {
-    // Much higher spawn rate: starts at 3/sec, ramps up fast
-    const baseRate = 3 + gameTime / 30 * 1.5 + Math.floor(gameTime / 60) * 0.8;
+    // Balanced spawn rate: starts gentle, ramps up over time
+    const baseRate = 1.5 + gameTime / 60 * 0.8 + Math.floor(gameTime / 60) * 0.4;
     spawnTimer += dt * baseRate;
     while (spawnTimer >= 1) {
         spawnTimer -= 1;
@@ -866,7 +881,7 @@ function updateSpawning(dt) {
     }
     // Wave burst every 30 seconds - big swarm
     if (Math.floor(gameTime) % 30 === 0 && Math.floor(gameTime) !== Math.floor(gameTime - dt)) {
-        const burstCount = 8 + Math.floor(gameTime / 30) * 3;
+        const burstCount = 5 + Math.floor(gameTime / 60) * 2;
         for (let i = 0; i < burstCount; i++) {
             const a = (i / burstCount) * Math.PI * 2;
             spawnEnemy(0, player.x + Math.cos(a)*400, player.y + Math.sin(a)*400);
@@ -1100,30 +1115,24 @@ function fireWeapons(dt) {
                 }
                 break;
             }
-            case 'spin': { // 도깨비 방망이
-                const range = (40 + w.level * 10) * player.rangeMul;
-                const arcAngle = w.evolved ? Math.PI * 2 : (Math.PI * (0.5 + w.level * 0.15));
-                const startAng = Math.atan2(aimY, aimX) - arcAngle / 2;
-                for (const e of enemies) {
-                    const edx = e.x - player.x, edy = e.y - player.y;
-                    const ed = Math.sqrt(edx*edx + edy*edy);
-                    if (ed > range) continue;
-                    const ea = Math.atan2(edy, edx);
-                    let diff = ea - startAng;
-                    while (diff < -Math.PI) diff += Math.PI*2;
-                    while (diff > Math.PI) diff -= Math.PI*2;
-                    if (diff >= 0 && diff <= arcAngle) {
-                        const d = w.evolved ? dmg * 1.5 : dmg;
-                        e.hp -= d;
-                        spawnDmgNum(e.x, e.y - 10, d, critColor || '#8B4513');
-                        if (w.evolved || w.level >= 4) {
-                            const kbStr = 30;
-                            e.x += (edx/ed) * kbStr; e.y += (edy/ed) * kbStr;
-                        }
-                    }
+            case 'spin': { // 도깨비 방망이 - orbital weapon
+                // Spawn/refresh orbital projectiles that circle the player
+                const orbCount = w.evolved ? 4 : Math.min(1 + Math.floor(w.level / 2), 3);
+                const orbRadius = (50 + w.level * 8) * player.rangeMul;
+                const orbDmg = w.evolved ? dmg * 1.5 : dmg;
+                const orbSpd = 3 + w.level * 0.5; // rotation speed
+                for (let oi = 0; oi < orbCount; oi++) {
+                    const baseAngle = oi * (Math.PI * 2 / orbCount);
+                    projectiles.push({
+                        x: player.x + Math.cos(baseAngle) * orbRadius,
+                        y: player.y + Math.sin(baseAngle) * orbRadius,
+                        vx: 0, vy: 0, dmg: orbDmg, life: cd * 0.95,
+                        radius: w.evolved ? 14 : 10, enemy: false,
+                        color: '#8B4513', critColor,
+                        orbital: true, orbAngle: baseAngle, orbRadius, orbSpd,
+                        orbOwner: player, knockback: w.evolved || w.level >= 4
+                    });
                 }
-                // Visual
-                spawnParticles(player.x + aimX*20, player.y + aimY*20, '#8B4513', 3, 30);
                 break;
             }
             case 'zone': { // 여우불
@@ -1251,6 +1260,34 @@ function updateProjectiles(dt) {
             } else {
                 const d = Math.sqrt((player.x-p.x)**2+(player.y-p.y)**2);
                 if (d < p.radius + 10) damagePlayer(p.dmg * dt);
+            }
+            continue;
+        }
+
+        // Orbital weapons (spin around player)
+        if (p.orbital) {
+            p.orbAngle += p.orbSpd * dt;
+            p.x = player.x + Math.cos(p.orbAngle) * p.orbRadius;
+            p.y = player.y + Math.sin(p.orbAngle) * p.orbRadius;
+            // Hit enemies
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                const d = Math.sqrt((e.x-p.x)**2+(e.y-p.y)**2);
+                if (d < p.radius + e.radius) {
+                    if (!p._tick) p._tick = {};
+                    if (!p._tick[j] || p._tick[j] < t - 0.25) {
+                        p._tick[j] = t;
+                        e.hp -= p.dmg;
+                        e.hitFlash = 0.15;
+                        spawnDmgNum(e.x, e.y-10, p.dmg, p.critColor || '#8B4513');
+                        spawnParticles(e.x, e.y, '#CD853F', 2, 25);
+                        if (p.knockback) {
+                            const kx = e.x - player.x, ky = e.y - player.y;
+                            const kd = Math.sqrt(kx*kx+ky*ky)||1;
+                            e.x += kx/kd * 25; e.y += ky/kd * 25;
+                        }
+                    }
+                }
             }
             continue;
         }
@@ -1549,6 +1586,37 @@ function drawGame() {
     for (const p of projectiles) {
         const sx = p.x - camX + W/2, sy = p.y - camY + H/2;
         if (sx < -30 || sx > W+30 || sy < -30 || sy > H+30) continue;
+        if (p.orbital) {
+            // Spinning club/mace
+            ctx.save(); ctx.translate(sx, sy);
+            ctx.rotate(p.orbAngle * 2);
+            // Club handle
+            px(-2, -2, 4, 12, '#8B4513');
+            px(-1, -1, 2, 10, '#A0522D');
+            // Club head
+            circ(0, -5, p.radius * 0.6, '#6a3a2a');
+            circ(0, -5, p.radius * 0.4, '#8B6914');
+            // Spikes
+            circ(-3, -8, 2, '#888');
+            circ(3, -8, 2, '#888');
+            circ(0, -10, 2, '#888');
+            // Swing trail
+            ctx.globalAlpha = 0.3;
+            ctx.strokeStyle = '#CD853F'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(0, 0, p.radius * 0.8, -2, -0.5); ctx.stroke();
+            ctx.globalAlpha = 0.15;
+            ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(0, 0, p.radius, -2.5, -0.8); ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+            // Orbit ring indicator
+            const orbRing = p.orbRadius;
+            ctx.globalAlpha = 0.08;
+            ctx.strokeStyle = '#CD853F'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(W/2, H/2, orbRing, 0, Math.PI*2); ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+        }
         if (p.zone) {
             // Pulsing zone with inner ring
             const pulse = Math.sin(t * 6) * 0.1 + 0.9;
@@ -1732,11 +1800,30 @@ function drawGame() {
     const expW = W - 20;
     px(10, H-25, expW, 6, '#222');
     px(10, H-25, expW * (player.exp/player.expToNext), 6, '#00CC88');
-    // Bomb
+    // Bomb button (big visible circle)
+    const bbX = W - 50, bbY = H - 90, bbR = 28;
     if (bombCooldown > 0) {
-        txt(`부적폭탄 ${Math.ceil(bombCooldown)}s`, W-10, H-60, '#888', 8, 'right');
+        ctx.globalAlpha = 0.3;
+        circ(bbX, bbY, bbR, '#555');
+        ctx.globalAlpha = 1;
+        // Cooldown arc
+        ctx.strokeStyle = '#888'; ctx.lineWidth = 3;
+        const cdPct = bombCooldown / 30;
+        ctx.beginPath(); ctx.arc(bbX, bbY, bbR, -Math.PI/2, -Math.PI/2 + (1-cdPct)*Math.PI*2); ctx.stroke();
+        txt(`${Math.ceil(bombCooldown)}`, bbX, bbY-6, '#888', 12);
     } else {
-        txt('부적폭탄 [SPACE]', W-10, H-60, '#FFD700', 8, 'right');
+        // Ready - glowing
+        const glow = Math.sin(t * 4) * 0.15 + 0.85;
+        ctx.globalAlpha = 0.2 * glow;
+        circ(bbX, bbY, bbR + 6, '#FFD700');
+        ctx.globalAlpha = 0.6;
+        circ(bbX, bbY, bbR, '#442200');
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(bbX, bbY, bbR, 0, Math.PI*2); ctx.stroke();
+        // 부 character
+        txt('부', bbX, bbY-10, '#FFD700', 16);
+        txt('폭탄', bbX, bbY+6, '#FFD700', 8);
     }
     // Weapon icons
     const iconY = H - 85;
